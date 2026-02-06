@@ -1,0 +1,66 @@
+services:
+  # --- Base de Datos ---
+  db:
+    image: postgres:18-alpine
+    container_name: tree_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Middleware de DB (Connection Pooler) ---
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: tree_pgbouncer
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - DB_NAME=${POSTGRES_DB}
+      - POOL_MODE=transaction # CRÍTICO: Modo transacción para Django
+      - MAX_CLIENT_CONN=100
+      - DEFAULT_POOL_SIZE=20
+      - AUTH_TYPE=scram-sha-256 # Estándar moderno
+    ports:
+      - "6432:5432" # Exponemos el 6432 al host si queremos conectar un cliente SQL local
+    networks:
+      - backend_net
+
+  # --- Aplicación Django ---
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile  
+    container_name: tree_app
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./app_nodos:/app_nodos  
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - pgbouncer # Django depende de PgBouncer, no directo de DB (idealmente)
+    environment:
+      # Django se conecta a PgBouncer, no directo a la DB
+      - DB_HOST=pgbouncer
+      - DB_PORT=5432 # Puerto interno del contenedor pgbouncer
+    networks:
+      - backend_net
+
+volumes:
+  postgres_data:
+
+networks:
+  backend_net:
+    driver: bridge

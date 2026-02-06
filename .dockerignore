@@ -1,0 +1,16 @@
+# Entornos virtuales locales
+venv/
+.env/
+__pycache__/
+*.pyc
+
+# Git
+.git/
+.gitignore
+
+# Node / otros
+node_modules/
+
+# IDE
+.vscode/
+.idea/
