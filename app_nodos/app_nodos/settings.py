@@ -85,6 +85,7 @@ TEMPLATES = [
     },
 ]
 
+
 WSGI_APPLICATION = 'app_nodos.wsgi.application'
 
 
@@ -101,6 +102,17 @@ DATABASES = {
         "PORT": os.environ.get("POSTGRES_PORT"),
     }
 }
+
+import sys
+# --- LÓGICA DE BYPASS PARA TESTS (Senior Move) ---
+if 'test' in sys.argv:
+    # Si estamos ejecutando tests, nos saltamos el pgbouncer 
+    # y vamos directo al contenedor de la DB ('db' en docker-compose)
+    DATABASES['default']['HOST'] = 'db' 
+    # El puerto interno de la imagen de postgres siempre es 5432
+    DATABASES['default']['PORT'] = '5432'
+    
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
