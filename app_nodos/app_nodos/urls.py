@@ -14,25 +14,17 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+# app_nodos/urls.py
 from django.contrib import admin
 from django.urls import include, path
 from django.http import JsonResponse
-from rest_framework.routers import DefaultRouter
-from nodes.views import NodeViewSet
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
 
-router = DefaultRouter()
-router.register(r'nodes', NodeViewSet, basename='node')
-
-# --- Vista Inline para Health Check / Hello World ---
 def health_check(request):
-    """
-    Vista rápida para verificar que el contenedor y Django responden.
-    """
     return JsonResponse({
         "message": "Hello World! El sistema está online.",
         "status": 200
@@ -41,13 +33,18 @@ def health_check(request):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('hello/', health_check),
-    # Endpoints de JWT
+    
+    # Endpoints de JWT (Login)
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    # Endpoints de la app de nodos
-    path('api/', include(router.urls)),
-    # Documentación
+    
+    # RUTAS DE NODOS: El router de nodos se monta aquí
+    path('api/', include('nodes.urls')), 
+    
+    # RUTAS DE USUARIOS: Se montarán aquí también (desde users/urls.py)
+    path('api/', include('users.urls')),
+    
+    # Documentación (Swagger)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
