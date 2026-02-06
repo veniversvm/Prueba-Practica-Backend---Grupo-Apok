@@ -1,6 +1,11 @@
 from django.test import TestCase
 from nodes.models import Node
 from nodes.serializers import NodeSerializer
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.urls import reverse
+from django.db.models import ProtectedError 
+from rest_framework import viewsets, status 
 
 class NodeSerializerTest(TestCase):
     def setUp(self):
@@ -74,3 +79,36 @@ class NodeSerializerTest(TestCase):
         padre = serializer.data['children'][0]
         hijo = padre['children'][0]
         self.assertEqual(hijo['title'], 'Hijo')
+
+    def test_unique_title_at_same_level(self):
+        """Validar que no se puedan crear dos nodos con el mismo nombre bajo el mismo padre"""
+        # Intentar crear otro nodo llamado "Padre" bajo el mismo raíz
+        data = {'title': 'Padre', 'parent': self.root_node.id}
+        serializer = NodeSerializer(data=data)
+        
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('title', serializer.errors)
+
+class NodeDeleteTest(APITestCase):
+    def setUp(self):
+        # Crear un árbol: Padre -> Hijo
+        self.parent = Node.objects.create(title="Padre")
+        self.child = Node.objects.create(title="Hijo", parent=self.parent)
+        
+        self.parent_url = reverse('node-detail', kwargs={'pk': self.parent.pk})
+        self.child_url = reverse('node-detail', kwargs={'pk': self.child.pk})
+
+    def test_delete_leaf_node_success(self):
+        """Borrar un nodo sin hijos debe retornar 204"""
+        response = self.client.delete(self.child_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Node.objects.count(), 1)
+
+    def test_delete_parent_node_fails(self):
+        """Borrar un nodo con hijos debe retornar 400 y un mensaje claro"""
+        response = self.client.delete(self.parent_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error'], "Conflict")
+        # Verificar que el nodo sigue existiendo en la DB
+        self.assertTrue(Node.objects.filter(pk=self.parent.pk).exists())

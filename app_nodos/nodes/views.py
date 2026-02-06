@@ -1,8 +1,10 @@
-from rest_framework import viewsets
+from django.db.models import ProtectedError # IMPORTANTE: Faltaba este
+from rest_framework import viewsets, status # IMPORTANTE: Añadir status aquí
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from .models import Node
 from .serializers import NodeSerializer
+import pytz
 
 class NodeViewSet(viewsets.ModelViewSet):
     """
@@ -18,7 +20,6 @@ class NodeViewSet(viewsets.ModelViewSet):
         """
         queryset = Node.objects.all()
         if self.action == 'list':
-            # Iniciamos solo desde las raíces y pre-cargamos hijos para evitar N+1
             return queryset.filter(parent__isnull=True).prefetch_related('children')
         return queryset
 
@@ -28,7 +29,7 @@ class NodeViewSet(viewsets.ModelViewSet):
         """
         context = super().get_serializer_context()
         
-        # 1. Idioma (ISO 639-1)
+        # 1. Idioma
         lang_header = self.request.headers.get('Accept-Language', 'en')
         context['language'] = lang_header.split(',')[0].split('-')[0][:2]
         
@@ -48,14 +49,40 @@ class NodeViewSet(viewsets.ModelViewSet):
     @extend_schema(
         parameters=[
             OpenApiParameter(name='depth', description='Nivel de profundidad', required=False, type=int),
-            OpenApiParameter(name='Accept-Language', location=OpenApiParameter.HEADER, description='Idioma (es, en, fr)', type=str),
-            OpenApiParameter(name='X-Timezone', location=OpenApiParameter.HEADER, description='Zona horaria (ej: America/Caracas)', type=str),
+            OpenApiParameter(name='Accept-Language', location=OpenApiParameter.HEADER, description='Idioma', type=str),
+            OpenApiParameter(name='X-Timezone', location=OpenApiParameter.HEADER, description='Zona horaria', type=str),
         ]
     )
     def list(self, request, *args, **kwargs):
-        """
-        Lista los nodos raíces y delega la recursividad al serializador.
-        """
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data) 
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        Validación Senior de borrado con manejo de excepciones.
+        """
+        instance = self.get_object()
+
+        # 1. Validación Proactiva
+        if instance.children.exists():
+            return Response(
+                {
+                    "error": "Conflict",
+                    "message": "No se puede eliminar un nodo que tiene hijos."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 2. Validación Reactiva (Captura el error de integridad)
+        try:
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ProtectedError:
+            return Response(
+                {
+                    "error": "Conflict",
+                    "message": "Error de integridad: Este nodo está protegido."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
