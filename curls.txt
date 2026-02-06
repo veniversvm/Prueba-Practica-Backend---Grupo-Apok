@@ -1,0 +1,318 @@
+==========================================================
+GUÍA DE PRUEBAS API - GESTIÓN DE ÁRBOL DE NODOS
+==========================================================
+Base URL: http://localhost:8000/api/
+
+1. PREPARACIÓN (EJECUTAR EN TERMINAL)
+----------------------------------------------------------
+# Poblar la base de datos con la estructura jerárquica inicial
+docker compose exec web python manage.py seed_nodes
+
+# Crear usuarios de prueba (admin y usuario regular)
+docker compose exec web python manage.py seed_users
+
+# Verificar que el sistema está funcionando
+curl -X GET "http://localhost:8000/api/"
+
+2. AUTENTICACIÓN JWT
+----------------------------------------------------------
+# 1. Obtener token de acceso (login con ADMIN)
+curl -X POST "http://localhost:8000/api/token/" \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin@tree.com", "password": "password123"}'
+
+# Respuesta: {"refresh": "...", "access": "..."}
+# Guardar el access token para las siguientes peticiones
+
+TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# 2. Refrescar token cuando expire
+curl -X POST "http://localhost:8000/api/token/refresh/" \
+     -H "Content-Type: application/json" \
+     -d '{"refresh": "TU_REFRESH_TOKEN_AQUI"}'
+
+3. PRUEBAS DE PROFUNDIDAD (QUERY PARAMS)
+----------------------------------------------------------
+# Ver solo nodos raíz (Depth 0)
+curl -X GET "http://localhost:8000/api/nodes/?depth=0" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ver raíces e hijos inmediatos (Depth 1)
+curl -X GET "http://localhost:8000/api/nodes/?depth=1" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ver árbol completo (Hasta Nivel 2 o más)
+curl -X GET "http://localhost:8000/api/nodes/?depth=2" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ver sin profundidad (default: solo hijos directos)
+curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN"
+
+4. MULTI-IDIOMA (HEADERS: Accept-Language)
+----------------------------------------------------------
+# Visualizar números convertidos a palabras en ESPAÑOL
+curl -X GET "http://localhost:8000/api/nodes/?depth=1" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Accept-Language: es"
+
+# Visualizar números convertidos a palabras en INGLÉS
+curl -X GET "http://localhost:8000/api/nodes/?depth=1" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Accept-Language: en"
+
+# Visualizar en FRANCÉS
+curl -X GET "http://localhost:8000/api/nodes/?depth=1" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Accept-Language: fr"
+
+# Crear nuevo nodo con conversión automática (Ej: 500 -> quinientos)
+curl -X POST "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -H "Accept-Language: es" \
+     -d '{"title": "500", "parent": null}'
+
+# Crear nodo hijo (con padre específico)
+curl -X POST "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"title": "150", "parent": 1}'
+
+5. ZONAS HORARIAS DINÁMICAS (HEADERS: X-Timezone)
+----------------------------------------------------------
+# Ver created_at en zona horaria de Venezuela (UTC-4)
+curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "X-Timezone: America/Caracas"
+
+# Ver created_at en zona horaria de España (CET/CEST)
+curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "X-Timezone: Europe/Madrid"
+
+# Ver created_at en zona horaria de Japón (UTC+9)
+curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "X-Timezone: Asia/Tokyo"
+
+# Ver con idioma y timezone combinados
+curl -X GET "http://localhost:8000/api/nodes/?depth=1" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Accept-Language: es" \
+     -H "X-Timezone: America/Buenos_Aires"
+
+6. VALIDACIÓN DE BORRADO (LÓGICA DE NEGOCIO)
+----------------------------------------------------------
+# NOTA: Reemplazar [ID] por un ID que tenga hijos según el seeder (Ej: 1)
+# Intentar borrar un nodo con hijos (DEBE FALLAR CON 400)
+curl -i -X DELETE "http://localhost:8000/api/nodes/1/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Respuesta esperada: 400 Bad Request
+# {"error": "No se puede eliminar un nodo que tiene hijos activos."}
+
+# Crear un nodo hoja para prueba de eliminación
+curl -X POST "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"title": "999", "parent": null}'
+
+# Obtener el ID del nodo recién creado
+LAST_ID=$(curl -s -X GET "http://localhost:8000/api/nodes/" \
+          -H "Authorization: Bearer $TOKEN" | \
+          python3 -c "import sys, json; \
+          data=json.load(sys.stdin); \
+          print(max([n['id'] for n in data['results']]))")
+
+# Borrar el nodo hoja (DEBE DAR 204)
+curl -i -X DELETE "http://localhost:8000/api/nodes/${LAST_ID}/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Verificar que el nodo fue borrado (soft delete)
+curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" | grep -i "$LAST_ID"
+
+7. BÚSQUEDA Y FILTRADO
+----------------------------------------------------------
+# Buscar nodos por título
+curl -X GET "http://localhost:8000/api/nodes/?search=cinco" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Accept-Language: es"
+
+# Filtrar por nodo padre específico
+curl -X GET "http://localhost:8000/api/nodes/?parent=1" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ordenar por fecha de creación (más recientes primero)
+curl -X GET "http://localhost:8000/api/nodes/?ordering=-created_at" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ordenar por título (alfabético)
+curl -X GET "http://localhost:8000/api/nodes/?ordering=title" \
+     -H "Authorization: Bearer $TOKEN"
+
+8. GESTIÓN DE USUARIOS (ADMIN/SUDO REQUERIDO)
+----------------------------------------------------------
+# Listar usuarios (ADMIN ve todos excepto SUDO, USER ve solo su perfil)
+curl -X GET "http://localhost:8000/api/users/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ver mi perfil
+curl -X GET "http://localhost:8000/api/users/me/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Actualizar mi perfil
+curl -X PATCH "http://localhost:8000/api/users/me/update/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"first_name": "Juan", "last_name": "Pérez"}'
+
+# Cambiar mi contraseña
+curl -X POST "http://localhost:8000/api/users/me/change-password/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"old_password": "password123", "new_password": "nuevaPassword456", "confirm_password": "nuevaPassword456"}'
+
+# Ver nodos creados por un usuario específico (auditoría)
+curl -X GET "http://localhost:8000/api/users/1/nodes-created/" \
+     -H "Authorization: Bearer $TOKEN"
+
+9. CREAR NUEVOS USUARIOS (REQUIERE PERMISOS ADMIN)
+----------------------------------------------------------
+# Crear usuario regular (requiere rol ADMIN o SUDO)
+curl -X POST "http://localhost:8000/api/users/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+          "username": "nuevo_usuario",
+          "email": "nuevo@email.com",
+          "password": "password123",
+          "password_confirm": "password123",
+          "role": "USER",
+          "first_name": "Nuevo",
+          "last_name": "Usuario"
+        }'
+
+# Crear usuario ADMIN (solo SUDO puede hacer esto)
+# Primero, autenticarse como SUDO:
+SUDO_TOKEN=$(curl -s -X POST "http://localhost:8000/api/token/" \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin", "password": "SUDO_PASSWORD_DEL_ENV"}' | \
+     python3 -c "import sys, json; print(json.load(sys.stdin)['access'])")
+
+curl -X POST "http://localhost:8000/api/users/" \
+     -H "Authorization: Bearer $SUDO_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{
+          "username": "nuevo_admin",
+          "email": "admin2@system.com",
+          "password": "AdminPass123",
+          "password_confirm": "AdminPass123",
+          "role": "ADMIN"
+        }'
+
+10. PAGINACIÓN
+----------------------------------------------------------
+# Ver primera página (default 10 resultados por página)
+curl -X GET "http://localhost:8000/api/nodes/?page=1" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Ver segunda página
+curl -X GET "http://localhost:8000/api/nodes/?page=2" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Cambiar tamaño de página
+curl -X GET "http://localhost:8000/api/nodes/?page=1&page_size=5" \
+     -H "Authorization: Bearer $TOKEN"
+
+11. CACHÉ (DEMOSTRACIÓN)
+----------------------------------------------------------
+# Primera petición (puede ser más lenta si no hay caché)
+time curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Segunda petición (debería ser más rápida por el caché)
+time curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN"
+
+# Crear un nodo para invalidar el caché
+curl -X POST "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"title": "777", "parent": null}'
+
+# Nueva petición (caché invalidado, primera carga)
+time curl -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN"
+
+12. DOCUMENTACIÓN SWAGGER
+----------------------------------------------------------
+# Acceder vía navegador para ver la UI interactiva:
+URL: http://localhost:8000/api/docs/
+
+# Obtener token desde Swagger UI:
+1. Click en "Authorize" (botón verde)
+2. Usar: Bearer <TU_TOKEN_ACCESS>
+
+# Descargar el esquema OpenAPI (JSON):
+curl "http://localhost:8000/api/schema/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -o openapi-schema.json
+
+13. HEALTH CHECK Y MONITOREO
+----------------------------------------------------------
+# Verificar que el servicio está activo
+curl -X GET "http://localhost:8000/hello/"
+
+# Verificar admin Django
+URL: http://localhost:8000/admin/
+Credenciales: admin / Admin123! (o las configuradas en .env)
+
+14. ERRORES COMUNES Y SOLUCIÓN
+----------------------------------------------------------
+# Error 401: No autenticado
+# Solución: Obtener nuevo token JWT
+
+# Error 403: Permiso denegado
+# Solución: Verificar rol de usuario (USER no puede crear/borrar)
+
+# Error 400: Validación fallida
+# Solución: Revisar los datos enviados en el JSON
+
+# Error 404: Recurso no encontrado
+# Solución: Verificar que el ID existe
+
+# Comando para debuggear errores:
+curl -i -X [METHOD] "http://localhost:8000/api/[ENDPOINT]/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"key": "value"}'
+
+15. SCRIPTS ÚTILES PARA TESTING
+----------------------------------------------------------
+# Script para probar todas las características
+#!/bin/bash
+
+echo "=== PRUEBA COMPLETA DEL SISTEMA ==="
+echo "1. Obteniendo token..."
+TOKEN=$(curl -s -X POST "http://localhost:8000/api/token/" \
+     -H "Content-Type: application/json" \
+     -d '{"username": "admin@tree.com", "password": "password123"}' | \
+     python3 -c "import sys, json; print(json.load(sys.stdin)['access'])")
+
+echo "Token obtenido: ${TOKEN:0:50}..."
+
+echo "2. Probando listado con idioma español..."
+curl -s -X GET "http://localhost:8000/api/nodes/?depth=1" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Accept-Language: es" | python3 -m json.tool | head -20
+
+echo "3. Probando timezone..."
+curl -s -X GET "http://localhost:8000/api/nodes/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "X-Timezone: Asia/Tokyo" | python3 -m json.tool | head -10
+
+echo "=== PRUEBA COMPLETADA ==="
+
+# Ejecutar con: bash test_api.sh

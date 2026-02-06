@@ -2,19 +2,18 @@ from rest_framework import permissions
 
 class IsActiveAndConfirmed(permissions.BasePermission):
     """
-    Permite el acceso a usuarios que cumplen la política de seguridad mínima:
-    - Autenticado.
-    - Usuario activo (`is_active=True`).
-    - Correo electrónico confirmado (`is_email_confirmed=True`).
+    Permite el acceso solo a usuarios que cumplen la política mínima de seguridad:
+    - Debe estar autenticado.
+    - Debe estar activo (`is_active=True`).
+    - Su correo debe estar confirmado (`is_email_confirmed=True`).
 
-    Este permiso se usa típicamente para las operaciones de LECTURA (GET/LIST).
+    Este permiso se aplica típicamente a operaciones de LECTURA (GET).
     """
 
     def has_permission(self, request, view):
         """
-        Retorna True si el usuario cumple la política.
+        Verifica si la solicitud cumple con los criterios de usuario activo y confirmado.
         """
-        # Se asume que request.user existe si el AuthenticationBackend (JWT) pasó.
         user = request.user
         
         return bool(
@@ -27,23 +26,21 @@ class IsActiveAndConfirmed(permissions.BasePermission):
 
 class IsAdminUserCustom(permissions.BasePermission):
     """
-    Permite acceso de ESCRITURA (POST, PUT, DELETE) solo a roles ADMIN o SUDO.
+    Permite el acceso solo a roles con privilegios de escritura (ADMIN o SUDO).
 
-    Requiere que el usuario esté autenticado y tenga el email confirmado.
+    Requiere autenticación, confirmación de email, y que el rol sea 'ADMIN' o 'SUDO'.
     """
 
     def has_permission(self, request, view):
         """
-        Retorna True si el usuario tiene el rol y el email confirmado.
+        Verifica si el usuario tiene el rol necesario para realizar la acción
+        de escritura (POST, PUT, PATCH, DELETE).
         """
         user = request.user
         
-        # Primero, verifica la autenticación.
         if not (user and user.is_authenticated):
             return False
-        
-        # Regla de Negocio: Solo ADMIN o SUDO pueden editar/borrar/crear.
-        # Y su correo debe estar confirmado.
+            
         is_allowed_role = user.role in ['ADMIN', 'SUDO']
         
         return bool(is_allowed_role and user.is_email_confirmed)
@@ -51,17 +48,16 @@ class IsAdminUserCustom(permissions.BasePermission):
 
 class IsSudoUser(permissions.BasePermission):
     """
-    Permite acceso exclusivo al rol SUDO.
+    Permite el acceso exclusivo al usuario con el rol 'SUDO'.
 
-    Este permiso se usa para endpoints críticos de gestión del sistema.
+    Este permiso se reserva para operaciones críticas del sistema.
     """
 
     def has_permission(self, request, view):
         """
-        Retorna True si el usuario es SUDO y está autenticado.
+        Verifica si el usuario autenticado posee el rol 'SUDO'.
         """
         user = request.user
-        
         return bool(
             user and 
             user.is_authenticated and 

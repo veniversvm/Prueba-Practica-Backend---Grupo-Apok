@@ -7,12 +7,23 @@ User = get_user_model()
 
 class EmailOrUsernameBackend(ModelBackend):
     """
-    Backend de autenticación inteligente:
-    1. Detecta si el input es un patrón de email.
-    2. Busca por Email/Username o solo Username según corresponda.
-    3. Valida que el email esté confirmado.
+    Backend de autenticación avanzado para el sistema.
+
+    Permite el inicio de sesión utilizando el correo electrónico o el nombre
+    de usuario (login dual). Implementa optimización de búsqueda y una
+    regla de negocio de seguridad.
     """
+    
     def authenticate(self, request, username=None, password=None, **kwargs):
+        """
+        Intenta autenticar al usuario basado en las credenciales proporcionadas.
+
+        :param request: El objeto HttpRequest.
+        :param username: El valor introducido por el usuario (puede ser email o username).
+        :param password: La contraseña.
+        :returns: El objeto User si la autenticación es exitosa y cumple las reglas;
+                  de lo contrario, retorna None.
+        """
         if username is None:
             return None
 
@@ -22,22 +33,25 @@ class EmailOrUsernameBackend(ModelBackend):
 
         try:
             if is_email_format:
-                # Estrategia A: El input parece un email. 
-                # Buscamos en ambos campos por si un username tiene formato de email (edge case)
-                user = User.objects.get(Q(email__iexact=username) | Q(username__iexact=username))
+                # ESTRATEGIA OPTIMIZADA: Si parece un email, busca por email o username.
+                user = User.objects.get(
+                    Q(email__iexact=username) | Q(username__iexact=username)
+                )
             else:
-                # Estrategia B: El input NO es un email. 
-                # Buscamos solo por username (Optimización de índice)
+                # ESTRATEGIA OPTIMIZADA: Si NO parece un email, busca SÓLO por username.
+                # Esto es más rápido ya que no consulta el índice de email innecesariamente.
                 user = User.objects.get(username__iexact=username)
         except User.DoesNotExist:
             return None
 
-        # Validación de contraseña y estado activo (is_active)
+        # 1. Validación de contraseña y estado activo (is_active)
         if user.check_password(password) and self.user_can_authenticate(user):
-            # REGLA DE NEGOCIO: El correo DEBE estar confirmado
+            
+            # 2. REGLA DE NEGOCIO: El correo DEBE estar confirmado para obtener el token JWT
             if not user.is_email_confirmed:
-                # Podríamos loguear este intento fallido para auditoría
+                # Falla la autenticación por regla de seguridad.
                 return None
+            
             return user
         
         return None

@@ -1,6 +1,6 @@
 [project]
 name = "tree"
-version = "0.1.0"
+version = "1.0.0"
 description = "Django project running fully on Docker"
 requires-python = ">=3.12"
 

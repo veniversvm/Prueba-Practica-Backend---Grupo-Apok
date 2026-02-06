@@ -28,6 +28,7 @@ services:
       - DB_HOST=db
       - DB_NAME=${POSTGRES_DB}
       - POOL_MODE=transaction # CRÍTICO: Modo transacción para Django
+      - DB_KEY=${DB_KEY} # Pasamos la clave de Django al pooler para que pueda validar conexiones
       - MAX_CLIENT_CONN=100
       - DEFAULT_POOL_SIZE=20
       - AUTH_TYPE=scram-sha-256 # Estándar moderno

@@ -7,13 +7,24 @@ from nodes.models import Node
 User = get_user_model()
 
 class Command(BaseCommand):
+    """
+    Comando de gestión personalizado para poblar la base de datos con
+    una estructura jerárquica de nodos.
+
+    Asegura que cada nodo creado contenga campos de auditoría ('created_by' y
+    'updated_by') asignados a usuarios con roles ADMIN o SUDO.
+    """
     help = 'Puebla la base de datos con una estructura jerárquica de nodos y auditoría'
 
     def handle(self, *args, **kwargs):
-        self.stdout.write(self.style.WARNING('Iniciando el sembrado de datos con auditoría...'))
+        self.stdout.write(
+            self.style.WARNING('Iniciando el sembrado de datos con auditoría...')
+        )
 
         # 1. Obtener usuarios capaces de crear nodos (ADMIN y SUDO confirmados)
-        admins = list(User.objects.filter(role__in=['ADMIN', 'SUDO'], is_email_confirmed=True))
+        admins = list(
+            User.objects.filter(role__in=['ADMIN', 'SUDO'], is_email_confirmed=True)
+        )
         
         if not admins:
             self.stdout.write(self.style.ERROR(
@@ -31,7 +42,7 @@ class Command(BaseCommand):
             root_titles = ["Empresa", "Tecnología", "Recursos", "1", "100"]
             
             for title in root_titles:
-                author = random.choice(admins) # Seleccionamos un autor al azar
+                author = random.choice(admins)  # Seleccionamos un autor al azar
                 node = Node.objects.create(
                     title=title, 
                     parent=None,
@@ -45,6 +56,7 @@ class Command(BaseCommand):
             for root in roots:
                 for i in range(1, 4):
                     author = random.choice(admins)
+                    # El título incluye números para probar la conversión
                     title = random.choice([f"Sub-{root.title} {i}", str(random.randint(2, 50))])
                     
                     child = Node.objects.create(
@@ -67,4 +79,6 @@ class Command(BaseCommand):
                                 updated_by=author
                             )
 
-        self.stdout.write(self.style.SUCCESS('¡Seeder de nodos completado con auditoría exitosa!'))
+        self.stdout.write(
+            self.style.SUCCESS('¡Seeder de nodos completado con auditoría exitosa!')
+        )

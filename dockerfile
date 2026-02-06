@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     build-essential \
     libpq-dev \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias de Python
@@ -26,6 +27,12 @@ COPY app_nodos/ /app_nodos/
 
 # Exponer puerto (informativo)
 EXPOSE 8000
+
+COPY ./docker/django/entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//g' /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Comando por defecto (lo sobreescribiremos en compose o entrypoint)
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
