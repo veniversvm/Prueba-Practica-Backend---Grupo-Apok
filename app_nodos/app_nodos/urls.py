@@ -15,8 +15,14 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 from django.http import JsonResponse
+from rest_framework.routers import DefaultRouter
+from nodes.views import NodeViewSet
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+router = DefaultRouter()
+router.register(r'nodes', NodeViewSet, basename='node')
 
 # --- Vista Inline para Health Check / Hello World ---
 def health_check(request):
@@ -32,4 +38,8 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('hello/', health_check),
+    path('api/', include(router.urls)),
+    # Documentación
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
 ]
