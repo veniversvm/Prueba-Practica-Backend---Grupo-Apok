@@ -20,6 +20,10 @@ from django.http import JsonResponse
 from rest_framework.routers import DefaultRouter
 from nodes.views import NodeViewSet
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 
 router = DefaultRouter()
 router.register(r'nodes', NodeViewSet, basename='node')
@@ -38,6 +42,10 @@ def health_check(request):
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('hello/', health_check),
+    # Endpoints de JWT
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # Endpoints de la app de nodos
     path('api/', include(router.urls)),
     # Documentación
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

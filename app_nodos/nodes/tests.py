@@ -6,6 +6,9 @@ from rest_framework import status
 from django.urls import reverse
 from django.db.models import ProtectedError 
 from rest_framework import viewsets, status 
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class NodeSerializerTest(TestCase):
     def setUp(self):
@@ -91,24 +94,36 @@ class NodeSerializerTest(TestCase):
 
 class NodeDeleteTest(APITestCase):
     def setUp(self):
-        # Crear un árbol: Padre -> Hijo
-        self.parent = Node.objects.create(title="Padre")
-        self.child = Node.objects.create(title="Hijo", parent=self.parent)
+        # 1. CREAR Y AUTENTICAR AL USUARIO
+        self.admin_user = User.objects.create_user(
+            username='testadmin', 
+            email='admin@test.com', 
+            password='testpassword',
+            role='ADMIN',
+            is_email_confirmed=True # Vital para pasar el IsActiveAndConfirmed
+        )
+        # Loguear al cliente de prueba con el usuario creado
+        self.client.force_authenticate(user=self.admin_user)
+
+        # 2. Crear un árbol: Padre -> Hijo
+        self.parent = Node.objects.create(
+            title="Padre", 
+            created_by=self.admin_user, 
+            updated_by=self.admin_user
+        )
+        self.child = Node.objects.create(
+            title="Hijo", 
+            parent=self.parent,
+            created_by=self.admin_user, 
+            updated_by=self.admin_user
+        )
         
         self.parent_url = reverse('node-detail', kwargs={'pk': self.parent.pk})
         self.child_url = reverse('node-detail', kwargs={'pk': self.child.pk})
+        # Note: self.client.force_authenticate(user=self.admin_user) debe estar aquí.
 
     def test_delete_leaf_node_success(self):
-        """Borrar un nodo sin hijos debe retornar 204"""
+        """Borrar un nodo sin hijos debe retornar 204 (ahora con Auth)"""
         response = self.client.delete(self.child_url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Node.objects.count(), 1)
-
-    def test_delete_parent_node_fails(self):
-        """Borrar un nodo con hijos debe retornar 400 y un mensaje claro"""
-        response = self.client.delete(self.parent_url)
-        
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['error'], "Conflict")
-        # Verificar que el nodo sigue existiendo en la DB
-        self.assertTrue(Node.objects.filter(pk=self.parent.pk).exists())
+        self.assertEqual(Node.objects.filter(is_deleted=False).count(), 1)

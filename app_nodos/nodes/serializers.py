@@ -1,21 +1,25 @@
-from rest_framework import serializers, viewsets, status
-from rest_framework.response import Response
+from rest_framework import serializers
 from .models import Node
 from num2words import num2words
 import pytz
 
 class NodeSerializer(serializers.ModelSerializer):
-    # Definimos children como un MethodField para controlar la recursividad
     children = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
+    # Añadimos los campos de auditoría como lectura
+    created_by_name = serializers.ReadOnlyField(source='created_by.username')
+    updated_by_name = serializers.ReadOnlyField(source='updated_by.username')
 
     class Meta:
         model = Node
-        fields = ['id', 'title', 'parent', 'children', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id', 'title', 'parent', 'children', 
+            'created_at', 'created_by_name', 'updated_by_name'
+        ]
+        read_only_fields = ['id', 'created_at', 'created_by_name', 'updated_by_name']
 
     def validate_title(self, value):
-        # ... (mantener lógica de conversión de números que ya teníamos)
+        """Saneamiento y conversión de números a palabras."""
         text_value = str(value).strip()
         if text_value.isdigit():
             lang = self.context.get('language', 'en')
@@ -26,81 +30,57 @@ class NodeSerializer(serializers.ModelSerializer):
         return text_value
 
     def get_children(self, obj):
-        """
-        Lógica de profundidad dinámica.
-        """
+        """Lógica de profundidad dinámica filtrando nodos borrados."""
         max_depth = self.context.get('max_depth', 0)
         current_depth = self.context.get('current_depth', 0)
 
-        # Si aún no hemos alcanzado la profundidad máxima, serializamos los hijos
         if current_depth < max_depth:
+            # IMPORTANTE: Filtrar por is_deleted=False para no mostrar nodos borrados
+            active_children = obj.children.filter(is_deleted=False)
             return NodeSerializer(
-                obj.children.all(), 
+                active_children, 
                 many=True, 
                 context={
                     **self.context, 
                     'current_depth': current_depth + 1
                 }
             ).data
-        return [] # Si llegamos al límite, devolvemos lista vacía (no profundizamos más)
-    
+        return []
+
     def validate(self, data):
-        """
-        Validaciones de integridad de negocio.
-        """
-        # 1. Obtener el título ya procesado (después de validate_title)
-        # Si no está en data (porque es un PATCH parcial), lo tomamos de la instancia
+        """Validaciones de integridad y unicidad."""
         title = data.get('title', getattr(self.instance, 'title', None))
         parent = data.get('parent', getattr(self.instance, 'parent', None))
 
-        # 2. Validación de Unicidad por Nivel
-        # Buscamos si existe otro nodo con el mismo título y el mismo padre
-        queryset = Node.objects.filter(title=title, parent=parent)
+        # 1. Validación de Unicidad por Nivel (Solo contra nodos NO borrados)
+        queryset = Node.objects.filter(
+            title__iexact=title, 
+            parent=parent, 
+            is_deleted=False
+        )
         
-        # Si estamos editando, excluimos el nodo actual de la búsqueda
         if self.instance:
             queryset = queryset.exclude(pk=self.instance.pk)
 
         if queryset.exists():
             raise serializers.ValidationError({
-                "title": f"Ya existe un nodo con el título '{title}' en este nivel de la jerarquía."
+                "title": f"Ya existe un nodo activo con el título '{title}' en este nivel."
             })
 
-        # 3. Validación de auto-referencia (ya la tenías)
+        # 2. Validación de auto-referencia
         if self.instance and parent and parent.pk == self.instance.pk:
             raise serializers.ValidationError({
                 "parent": "Un nodo no puede ser su propio padre."
             })
 
         return data
-    
+
     def get_created_at(self, obj):
-        # Obtenemos la zona horaria del contexto que pasamos desde la vista
+        """Conversión de zona horaria dinámica."""
         tz_name = self.context.get('user_timezone', 'UTC')
         try:
             user_tz = pytz.timezone(tz_name)
-            # Convertimos de UTC a la zona del usuario
             local_dt = obj.created_at.astimezone(user_tz)
             return local_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
         except Exception:
             return obj.created_at.isoformat()
-        
-    def destroy(self, request, *args, **kwargs):
-        """
-        Validación Senior: Antes de borrar, verificamos si hay hijos.
-        Esto evita errores 500 de integridad referencial.
-        """
-        instance = self.get_object()
-        
-        if instance.children.exists():
-            return Response(
-                {
-                    "error": "Conflict",
-                    "message": "No se puede eliminar un nodo que tiene hijos. Por favor, elimine los hijos primero."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Si no tiene hijos, procedemos con el borrado estándar
-        self.perform_destroy(instance)
-        return Response(status=status.HTTP_204_NO_CONTENT)
