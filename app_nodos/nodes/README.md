@@ -1,19 +1,19 @@
 # 📂 Módulo: Nodos Jerárquicos (`nodes`)
 
-Este módulo encapsula la lógica de negocio central para la gestión del árbol de nodos. Implementa la jerarquía, la lógica de localización (idioma/timezone), la seguridad granular por roles y las validaciones de integridad de datos.
+Este módulo encapsula la lógica de negocio central para la gestión de una estructura jerárquica de árbol. Implementa autorreferencia, borrado lógico, auditoría completa, validaciones de negocio, lógica de localización y optimización de rendimiento.
 
 ---
 
 ## 🏗️ Estructura del Módulo
 
-| Archivo                  | Descripción Principal                                                                                |
-| :----------------------- | :---------------------------------------------------------------------------------------------------- |
-| **models.py**      | Define el modelo `Node` con Autorreferencia, Soft Delete, y Auditoría.                             |
-| **serializers.py** | Gestiona la transformación de datos (Números a Palabras) y la serialización recursiva (`depth`). |
-| **views.py**       | Contiene el `NodeViewSet` con lógica de Caching, Permisos y Query optimizado.                      |
-| **permissions.py** | Define la Matriz de Seguridad (Roles SUDO/ADMIN/USER y Confirmación de Email).                       |
-| **management/**    | Contiene comandos personalizados para la inicialización automática de datos (`seed_nodes`).       |
-| **tests.py**       | Suite de pruebas para Serializer, Vistas, Lógica de Borrado y Unicidad.                              |
+| Archivo                                      | Descripción Principal                                                                                                         |
+| :------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| **models.py**                          | Define el modelo `Node` con Autorreferencia, Soft Delete, Auditoría y Restricciones de Unicidad Condicional.                |
+| **serializers.py**                     | Gestiona la transformación de datos (Números a Palabras) y la serialización recursiva limitada por profundidad (`depth`). |
+| **views.py**                           | Contiene el `NodeViewSet` con Caching (60s) para listados y lógica de permisos por acción.                                 |
+| **permissions.py**                     | Define los permisos mínimos requeridos para las operaciones (ej.`IsActiveAndConfirmed`).                                    |
+| **management/commands/seed\_nodes.py** | Comando para poblar la DB con una estructura de árbol de 3 niveles para testing.                                              |
+| **tests.py**                           | Suite de pruebas para Serializer, Vistas, Lógica de Borrado y Unicidad.                                                       |
 
 ---
 
@@ -21,44 +21,78 @@ Este módulo encapsula la lógica de negocio central para la gestión del árbol
 
 ### 1. Jerarquía y Persistencia
 
-* **Autorreferencia:** El campo `parent` permite la estructura de árbol (`parent` FK a `self`).
-* **Soft Delete (Borrado Lógico):** El campo `is_deleted=True` oculta nodos de la API, manteniendo la integridad referencial y el historial en la DB.
-* **Integridad de Unicidad:** Se utilizan `UniqueConstraint` en `models.py` para asegurar que:
-  1. No existan dos nodos activos (`is_deleted=False`) con el mismo `title` bajo el mismo `parent`.
-  2. No existan dos nodos activos raíz con el mismo `title`.
+- **Autorreferencia:** `parent` (FK a `self`). Múltiples raíces permitidas.
+- **Soft Delete:** `is_deleted=True` oculta nodos de la API. El borrado físico está prohibido por la API.
+- **Integridad de Unicidad:** Restricción en DB para títulos únicos *solo* entre nodos activos y bajo el mismo padre.
 
-### 2. Lógica de Localización (Multi-Idioma y Timezone)
+### 2. Lógica de Localización (Internacionalización)
 
-| Lógica                             | Implementación                   | Origen de Datos                         |
-| :---------------------------------- | :-------------------------------- | :-------------------------------------- |
-| **Title** (Número a Palabra) | `NodeSerializer.validate_title` | Header `Accept-Language` (ISO 639-1). |
-| **Created At** (Zona Horaria) | `NodeSerializer.get_created_at` | Header `X-Timezone`.                  |
+- **Título (Número a Palabra):** `title` se convierte a texto (ej. `1` → `"uno"`) usando `num2words` basado en el header **`Accept-Language`** (ISO 639-1).
+- **Fecha (`created_at`):** Se convierte de UTC a la zona horaria solicitada en el header **`X-Timezone`**.
 
-### 3. Rendimiento y Consultas
+### 3. Rendimiento
 
-* **Consulta Jerárquica:** El `NodeViewSet.get_queryset` filtra solo nodos raíz (`parent__isnull=True`) y usa `prefetch_related('children')` para cargar todos los hijos en solo dos consultas SQL (Fix del problema N+1).
-* **Profundidad Dinámica:** El `NodeSerializer.get_children` controla la recursividad por el parámetro `?depth=X` del URL, evitando bucles infinitos.
-* **Caching:** El método `NodeViewSet.list` está decorado con `@cache_page(60)` para optimizar el rendimiento del listado. La caché es invalidada automáticamente en `perform_create`, `perform_update` y `destroy`.
+- **Caché:** El endpoint `GET /api/nodes/` está cacheado por 60 segundos. La caché se invalida automáticamente en cualquier operación de escritura (`POST`, `PUT`, `PATCH`, `DELETE`).
+- **Consultas Optimizadas:** Uso de `prefetch_related` para evitar el problema N+1 en listados jerárquicos.
 
 ### 4. Seguridad y Auditoría
 
-* **Auditoría Automática:** Los métodos `perform_create` y `perform_update` asignan automáticamente los usuarios `created_by` y `updated_by` desde el `request.user`.
-* **Control de Acceso:** La seguridad se aplica a nivel de Vista:
-  * **LECTURA:** Requiere `IsActiveAndConfirmed` (Cualquier usuario logueado con email verificado).
-  * **ESCRITURA/BORRADO:** Requiere `IsAdminUserCustom` (Roles ADMIN o SUDO con email verificado).
+- **Auditoría:** Los nodos rastrean al usuario responsable de su creación (`created_by`) y última actualización (`updated_by`).
+- **Control de Acceso (Permisos):**
+  - **LECTURA:** Requiere usuario autenticado, activo y con email confirmado.
+  - **ESCRITURA/BORRADO:** Requiere rol `ADMIN` o `SUDO`.
 
 ---
 
-## 🔑 Endpoint Principal (API)
+## 🔑 Endpoints API
 
-| Método             | URL                  | Funcionalidad                           | Permisos                     |
-| :------------------ | :------------------- | :-------------------------------------- | :--------------------------- |
-| **GET**       | `/api/nodes/`      | Lista el árbol jerárquico (cacheado). | LECTURA (Usuario Verificado) |
-| **GET**       | `/api/nodes/{id}/` | Detalle del nodo.                       | LECTURA (Usuario Verificado) |
-| **POST**      | `/api/nodes/`      | Crea un nuevo nodo.                     | ESCRITURA (ADMIN/SUDO)       |
-| **PUT/PATCH** | `/api/nodes/{id}/` | Actualiza un nodo.                      | ESCRITURA (ADMIN/SUDO)       |
-| **DELETE**    | `/api/nodes/{id}/` | Borrado lógico (`is_deleted=True`).  | ESCRITURA (ADMIN/SUDO)       |
+| Método          | URL                  | Funcionalidad                                     | Permisos                     |
+| :--------------- | :------------------- | :------------------------------------------------ | :--------------------------- |
+| **GET**    | `/api/nodes/`      | Lista raíces, respeta `depth` y aplica caché. | Lectura (Usuario Verificado) |
+| **POST**   | `/api/nodes/`      | Crea nuevo nodo (con auditoría).                 | Escritura (ADMIN/SUDO)       |
+| **DELETE** | `/api/nodes/{id}/` | Borrado lógico (`soft_delete`).                | Escritura (ADMIN/SUDO)       |
+
+### Parámetros Importantes
+
+- **Query Param:** `?depth={X}` (Controla la profundidad de la respuesta JSON).
+- **Header:** `Accept-Language` (Para traducción del título).
+- **Header:** `X-Timezone` (Para conversión de fechas).
 
 ---
 
-**NOTA:** Este módulo depende de la app `users` para el modelo de usuario personalizado y las reglas de rol.
+## 🧪 Testing y Validación
+
+El módulo cuenta con suite de pruebas que cubren:
+
+1. Serialización (Conversión numérica).
+2. Validación de unicidad por nivel.
+3. Control de profundidad (`depth`).
+4. Lógica de **Soft Delete** (Verifica que no se borra si tiene hijos activos).
+
+### Ejecución de Pruebas
+
+```bash
+# Ejecutar solo las pruebas del módulo Nodes
+docker compose exec web python manage.py test nodes --noinput
+```
+
+
+<pre class="vditor-reset" placeholder="" contenteditable="true" spellcheck="false"><hr data-block="0"/></pre>
+
+## 🛠️ Comandos de Gestión
+
+### Precarga de Datos
+
+Este comando ejecuta el seeder para poblar la base de datos con datos de prueba complejos.
+
+```bash
+# Crea una estructura de árbol de 3 niveles con datos de prueba 
+# (incluyendo títulos numéricos para probar la conversión a palabras).
+python manage.py seed_nodes
+```
+
+
+<pre class="vditor-reset" placeholder="" contenteditable="true" spellcheck="false"><hr data-block="0"/></pre>
+
+**Versión del Módulo:** 1.0.0
+**Dependencias Clave:** `num2words`, `pytz`, `drf-spectacular` (para documentación)
