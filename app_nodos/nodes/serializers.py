@@ -1,3 +1,4 @@
+# app_nodos/nodes/serializers.py
 from rest_framework import serializers
 from .models import Node
 from num2words import num2words
@@ -143,15 +144,15 @@ class NodeSerializer(serializers.ModelSerializer):
         - depth=0: sin hijos
         - depth=1: hijos directos (sin nietos)
         - depth=2: hijos + nietos
-        - depth=-1: todos los niveles
+        - depth=-1: todos los niveles (limitado a 10 por seguridad)
         """
         # Obtener parámetros de profundidad del contexto
         depth = self.context.get('depth', None)
         current_depth = self.context.get('current_depth', 0)
         
-        # Si depth es None (comportamiento por defecto)
+        # Si depth es None, comportamiento por defecto: solo hijos directos
         if depth is None:
-            # Solo mostrar hijos directos, PERO los hijos no deben mostrar sus hijos
+            # Lógica para hijos directos
             active_children = obj.children.filter(is_deleted=False)
             return NodeSerializer(
                 active_children,
@@ -159,7 +160,7 @@ class NodeSerializer(serializers.ModelSerializer):
                 context={
                     'language': self.context.get('language', 'en'),
                     'user_timezone': self.context.get('user_timezone', 'UTC'),
-                    'depth': 0,  # ← CRÍTICO: Poner 0 para que hijos no muestren nietos
+                    'depth': 0,  # IMPORTANTE: hijos no muestran nietos
                     'current_depth': current_depth + 1
                 }
             ).data
@@ -168,15 +169,19 @@ class NodeSerializer(serializers.ModelSerializer):
         if depth == 0:
             return []
         
-        # Si depth > 0 y ya alcanzamos o superamos la profundidad máxima
-        if depth > 0:
-            # Si current_depth + 1 > depth, no podemos mostrar más hijos
-            # Ejemplo: depth=1, current_depth=0 → podemos mostrar hijos
-            #          depth=1, current_depth=1 → NO podemos mostrar nietos
-            if current_depth + 1 > depth:
-                return []
+        # Calcular si podemos mostrar más niveles
+        can_show_more = False
         
-        # depth=-1 (infinito) o todavía tenemos niveles disponibles
+        if depth == -1:  # Profundidad infinita
+            # Limitar a 10 niveles por seguridad
+            can_show_more = current_depth < 10
+        elif depth > 0:
+            can_show_more = current_depth < depth
+        
+        if not can_show_more:
+            return []
+        
+        # Obtener hijos activos
         active_children = obj.children.filter(is_deleted=False)
         
         return NodeSerializer(
@@ -189,7 +194,6 @@ class NodeSerializer(serializers.ModelSerializer):
                 'current_depth': current_depth + 1
             }
         ).data
-
 
     def get_created_at(self, obj):
         """Convierte created_at a la zona horaria solicitada."""

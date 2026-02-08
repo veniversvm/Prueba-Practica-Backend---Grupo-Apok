@@ -2,16 +2,17 @@ from rest_framework import viewsets, status, generics
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404 
+from django.http import Http404
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 import pytz
 
 from .mixins import ValidateIDMixin
-
 from .models import Node
-from .serializers import NodeSerializer, serializers
+from .serializers import NodeSerializer
 
 CACHE_TIMEOUT = 180
 CACHE_VERSION_KEY = "node_list_cache_version"
@@ -267,20 +268,19 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         """
         Sobreescribir para obtener el objeto con validación adicional.
         """
-        # Primero validar que el ID sea válido usando el mixin
         pk = self.kwargs.get('pk')
         
         # Validar usando el método del mixin
-        is_valid, error_response = self.validate_id(pk)
+        is_valid, error_data = self.validate_id(pk)
         if not is_valid:
-            # Si hay error, lanzar ValidationError para que DRF lo maneje
-            raise serializers.ValidationError(error_response.data)
+            raise ValidationError(error_data)
         
-        # Obtener el queryset filtrado
-        queryset = self.filter_queryset(self.get_queryset())
-        
-        # Realizar la búsqueda del objeto
-        obj = get_object_or_404(queryset, pk=pk)
+        try:
+            # Usar get_object_or_404 con el queryset filtrado
+            queryset = self.filter_queryset(self.get_queryset())
+            obj = queryset.get(pk=pk)
+        except Node.DoesNotExist:
+            raise Http404(f"Nodo con ID {pk} no encontrado o está eliminado")
         
         # Verificar permisos
         self.check_object_permissions(self.request, obj)
@@ -385,58 +385,63 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         
         return tz_name
     
-    def _get_cache_version(self):
-        return cache.get(CACHE_VERSION_KEY, 1)
+    # def _get_cache_version(self):
+    #     return cache.get(CACHE_VERSION_KEY, 1)
     
-    def _invalidate_list_cache(self):
-        version = self._get_cache_version()
-        cache.set(CACHE_VERSION_KEY, version + 1)
+    # def _invalidate_list_cache(self):
+    #     version = self._get_cache_version()
+    #     cache.set(CACHE_VERSION_KEY, version + 1)
     
-    def _get_cache_key_func(self, request):
-        """
-        Función nombrada para generar claves de cache.
-        """
-        # Crear contexto temporal para extraer parámetros
-        temp_context = self.get_serializer_context()
+    # def _get_cache_key(self):
+    #     """
+    #     Genera clave de cache considerando todos los parámetros.
+    #     """
+    #     # Usar get_serializer_context para obtener parámetros consistentes
+    #     context = self.get_serializer_context()
         
-        version = self._get_cache_version()
-        language = temp_context.get('language', 'en')
-        timezone = temp_context.get('user_timezone', 'UTC')
-        depth = temp_context.get('depth', 'none')  # 'none' si no se especifica
+    #     version = self._get_cache_version()
+    #     language = context.get('language', 'en')
+    #     timezone = context.get('user_timezone', 'UTC')
+    #     depth = context.get('depth', 'none')
         
-        # Generar una clave segura para cache
-        # Eliminar caracteres problemáticos
-        safe_language = language.replace('-', '_').replace(' ', '_')
-        safe_timezone = timezone.replace('/', '_').replace(' ', '_')
+    #     # Crear clave segura
+    #     safe_key = f"node_list:v{version}:lang:{language}:tz:{timezone}:depth:{depth}"
         
-        return f"node_list_v{version}_lang_{safe_language}_tz_{safe_timezone}_depth_{depth}"
+    #     # Si hay query params adicionales, incluirlos
+    #     query_params = []
+    #     for key, value in sorted(self.request.GET.items()):
+    #         if key != 'depth':  # Ya lo incluimos
+    #             query_params.append(f"{key}:{value}")
+        
+    #     if query_params:
+    #         safe_key += f":{'|'.join(query_params)}"
+        
+    #     # Incluir información de usuario si está autenticado
+    #     if self.request.user.is_authenticated:
+    #         safe_key += f":user:{self.request.user.id}"
+        
+    #     return safe_key
     
-    @method_decorator(
-        cache_page(
-            CACHE_TIMEOUT,
-            key_prefix="node_list"
-        )
-    )
+    @method_decorator(cache_page(CACHE_TIMEOUT))
     def list(self, request, *args, **kwargs):
         """
         Lista nodos raíz con control de profundidad.
+        Usa cache_page nativo de Django.
         """
-        # Usar una versión más simple del cache key
-        return super().list(request, *args, **kwargs)
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
-    def get_cache_key(self, request):
-        """
-        Genera clave de cache incluyendo profundidad.
-        """
-        # Crear contexto temporal para extraer parámetros
-        temp_context = self.get_serializer_context()
-        
-        version = self._get_cache_version()
-        language = temp_context.get('language', 'en')
-        timezone = temp_context.get('user_timezone', 'UTC')
-        depth = temp_context.get('depth', 'none')  # 'none' si no se especifica
-        
-        return f"node_list_v{version}_lang_{language}_tz_{timezone}_depth_{depth}"
+    # ELIMINA estos métodos si existen:
+    # _get_cache_version
+    # _invalidate_list_cache  
+    # _get_cache_key
     
     def get_queryset(self):
         """
@@ -460,8 +465,6 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         Endpoint adicional: Obtener descendientes de un nodo específico.
         
         Ejemplo: GET /api/nodes/1/descendants/?depth=2
-        
-        Nota: La validación de ID se hace en el mixin.
         """
         # El mixin ya validó el ID en initial()
         node = self.get_object()
@@ -474,11 +477,11 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
     
     def perform_create(self, serializer):
-        self._invalidate_list_cache()
+        cache.clear()  # O cache.delete_pattern('*nodes*') si usas redis
         serializer.save()
     
     def perform_update(self, serializer):
-        self._invalidate_list_cache()
+        cache.clear()
         serializer.save()
     
     def retrieve(self, request, *args, **kwargs):
@@ -486,19 +489,12 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         Obtiene un nodo específico CON profundidad.
         
         Ejemplo: GET /nodes/5/?depth=3
-        
-        Nota: La validación de ID se hace en el mixin.
         """
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
     
     def destroy(self, request, *args, **kwargs):
-        """
-        Elimina lógicamente un nodo si no tiene hijos activos.
-        
-        Nota: La validación de ID se hace en el mixin.
-        """
         instance = self.get_object()
         
         if instance.children.filter(is_deleted=False).exists():
@@ -510,7 +506,7 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        self._invalidate_list_cache()
+        cache.clear()
         instance.soft_delete()
         
         return Response(
@@ -569,24 +565,26 @@ Obtiene árboles completos desde nodos raíz específicos o todos los árboles.
 )
 class NodeTreeView(APIView):
     """
-    Vista especializada para obtener árboles completos.
+    Vista para obtener árboles completos de nodos.
     """
+    
+    def get_permissions(self):
+        """
+        Usar los mismos permisos que NodeViewSet para list.
+        """
+        from nodes.permissions import IsActiveAndConfirmed
+        return [IsActiveAndConfirmed()]
     
     def get(self, request):
         """
-        Obtiene árboles completos con control de profundidad.
-        
-        Parámetros:
-        - root_id: ID del nodo raíz (opcional, si no se especifica, todos los raíces)
-        - depth: Profundidad máxima (opcional, default: mostrar solo hijos directos)
+        Obtiene árbol(es) completo(s).
         """
-        from .serializers import NodeSerializer
+        from nodes.serializers import NodeSerializer
         
-        # Obtener parámetros
         root_id = request.query_params.get('root_id')
         depth_param = request.query_params.get('depth')
         
-        # Procesar depth
+        # Procesar profundidad
         depth = None
         if depth_param is not None:
             try:
@@ -596,33 +594,47 @@ class NodeTreeView(APIView):
                 elif depth > 10:
                     depth = 10
             except (ValueError, TypeError):
-                depth = None
+                pass
         
         # Contexto para el serializador
         context = {
-            'request': request,
-            'language': 'en',  # Deberías extraer del header
-            'user_timezone': 'UTC',  # Deberías extraer del header
+            'language': request.headers.get('Accept-Language', 'en')[:2],
+            'user_timezone': request.headers.get('Time-Zone', 'UTC'),
             'depth': depth,
-            'current_depth': 0
+            'current_depth': 0,
+            'request': request
         }
         
-        # Filtrar nodos
-        queryset = Node.objects.filter(is_deleted=False)
+        # Normalizar idioma
+        language = context['language']
+        supported_languages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar']
+        context['language'] = language if language in supported_languages else 'en'
+        
+        # Normalizar zona horaria
+        tz_name = context['user_timezone']
+        if tz_name not in pytz.all_timezones:
+            context['user_timezone'] = 'UTC'
         
         if root_id:
-            # Árbol específico desde un nodo raíz
+            # Árbol específico
             try:
-                root_node = queryset.get(id=root_id, parent__isnull=True)
+                root_node = Node.objects.get(
+                    id=root_id,
+                    is_deleted=False,
+                    parent__isnull=True
+                )
                 serializer = NodeSerializer(root_node, context=context)
-                return Response([serializer.data])
+                return Response(serializer.data)
             except Node.DoesNotExist:
                 return Response(
-                    {"error": f"Nodo raíz con ID {root_id} no encontrado."},
+                    {"error": f"Nodo raíz con ID {root_id} no encontrado"},
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            # Todos los árboles (todos los nodos raíz)
-            root_nodes = queryset.filter(parent__isnull=True)
+            # Todos los árboles
+            root_nodes = Node.objects.filter(
+                is_deleted=False,
+                parent__isnull=True
+            )
             serializer = NodeSerializer(root_nodes, many=True, context=context)
             return Response(serializer.data)

@@ -1,9 +1,7 @@
-
-# nodes/mixins.py
+# app_nodos/nodes/mixins.py
 from rest_framework import status
 from rest_framework.response import Response
-
-from .serializers import serializers
+from rest_framework.exceptions import ValidationError
 
 class ValidateIDMixin:
     """
@@ -23,22 +21,16 @@ class ValidateIDMixin:
         try:
             pk_int = int(pk)
             if pk_int < 1:
-                return False, Response(
-                    {
-                        "error": "El ID debe ser un número positivo mayor o igual a 1.",
-                        "code": "invalid_id"
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return False, {
+                    "error": "El ID debe ser un número positivo mayor o igual a 1.",
+                    "code": "invalid_id"
+                }
             return True, None
         except (ValueError, TypeError):
-            return False, Response(
-                {
-                    "error": "ID inválido. Debe ser un número entero.",
-                    "code": "invalid_id_format"
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return False, {
+                "error": "ID inválido. Debe ser un número entero.",
+                "code": "invalid_id_format"
+            }
     
     def initial(self, request, *args, **kwargs):
         """
@@ -49,7 +41,7 @@ class ValidateIDMixin:
         # Solo validar si hay un pk en la URL
         if 'pk' in self.kwargs:
             pk = self.kwargs['pk']
-            is_valid, error_response = self.validate_id(pk)
+            is_valid, error_data = self.validate_id(pk)
             
             if not is_valid:
-                raise serializers.ValidationError(error_response.data)
+                raise ValidationError(error_data)
