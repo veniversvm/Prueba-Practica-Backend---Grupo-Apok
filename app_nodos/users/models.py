@@ -1,3 +1,4 @@
+from time import timezone
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.core.exceptions import ValidationError
@@ -44,7 +45,7 @@ class User(AbstractUser):
         help_text="Rol de acceso del usuario (SUDO, ADMIN, USER)."
     )
     is_email_confirmed = models.BooleanField(
-        default=False, 
+        default=True, 
         help_text="Indica si el usuario ha verificado su correo electrónico."
     )
 
@@ -66,6 +67,16 @@ class User(AbstractUser):
                     "Violación de Regla de Negocio: Ya existe un usuario SUDO."
                 )
         super().save(*args, **kwargs)
+
+    def soft_delete(self):
+        """
+        Método de borrado lógico para el modelo User.
+        Marca el usuario como eliminado y registra el timestamp.
+        """
+        self.is_deleted = True
+        # self.deleted_at = timezone.now()
+        self.is_active = False # Mejor práctica: Desactivar para que no pueda loguearse
+        self.save()
 
     def __str__(self):
         """

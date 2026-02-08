@@ -2,104 +2,123 @@ from rest_framework import serializers
 from .models import Node
 from num2words import num2words
 import pytz
+from django.utils import timezone as django_timezone
 
 class NodeSerializer(serializers.ModelSerializer):
     """
     Serializador para el modelo Node.
-
-    Gestiona la transformación del 'title' (número a palabra) y
-    la representación jerárquica con profundidad dinámica.
-    También implementa la lógica de auditoría y localización de fechas.
+    
+    Características:
+    - Control de profundidad recursiva
+    - Si no se pasa profundidad, solo muestra hijos directos
     """
     
-    children = serializers.SerializerMethodField(
-        help_text="Lista de nodos hijos (recursividad limitada por depth)."
-    )
-    created_at = serializers.SerializerMethodField(
-        help_text="Fecha de creación ajustada a la zona horaria del cliente."
-    )
-    # Campos de Auditoría (Solo lectura)
-    created_by_name = serializers.ReadOnlyField(
-        source='created_by.username', 
-        help_text="Nombre del usuario que creó el nodo."
-    )
-    updated_by_name = serializers.ReadOnlyField(
-        source='updated_by.username', 
-        help_text="Nombre del usuario que modificó por última vez el nodo."
-    )
-
+    title = serializers.SerializerMethodField()
+    children = serializers.SerializerMethodField()
+    created_at = serializers.SerializerMethodField()
+    
     class Meta:
-        """Configuración de metadatos del Serializer."""
         model = Node
-        fields = [
-            'id', 'title', 'parent', 'children', 
-            'created_at', 'created_by_name', 'updated_by_name'
-        ]
-        read_only_fields = [
-            'id', 'created_at', 'created_by_name', 'updated_by_name'
-        ]
-
-    def validate_title(self, value):
-        """
-        Saneamiento y conversión de números a palabras.
-
-        El 'title' es transformado de número a su representación textual
-        basado en el header 'Accept-Language' del contexto.
-
-        :param value: El título enviado en el request.
-        :returns: El título saneado y/o convertido.
-        """
-        text_value = str(value).strip()
-        if text_value.isdigit():
-            lang = self.context.get('language', 'en')
-            try:
-                text_value = num2words(int(text_value), lang=lang)
-            except NotImplementedError:
-                # Fallback a inglés si el idioma no es soportado
-                text_value = num2words(int(text_value), lang='en')
-        return text_value
-
+        fields = ['id', 'content', 'title', 'parent', 'children', 'created_at']
+        read_only_fields = ['id', 'title', 'created_at']
+    
+    def get_title(self, obj):
+        """Genera título en el idioma solicitado."""
+        language = self.context.get('language', 'en')
+        valid_languages = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar']
+        
+        if language not in valid_languages:
+            language = 'en'
+        
+        try:
+            return num2words(obj.id, lang=language)
+        except Exception:
+            return num2words(obj.id, lang='en')
+    
     def get_children(self, obj):
         """
-        Implementa la lógica de serialización recursiva y profundidad.
-
-        Filtra los hijos por `is_deleted=False` para preservar la integridad de la vista.
-
-        :param obj: Instancia del nodo actual.
-        :returns: Lista de hijos serializados o lista vacía si se alcanza `max_depth`.
+        Implementa la lógica de profundidad recursiva.
+        
+        Reglas:
+        - depth=None: solo hijos directos (default)
+        - depth=0: sin hijos
+        - depth=1: hijos directos (sin nietos)
+        - depth=2: hijos + nietos
+        - depth=-1: todos los niveles
         """
-        max_depth = self.context.get('max_depth', 0)
+        # Obtener parámetros de profundidad del contexto
+        depth = self.context.get('depth', None)
         current_depth = self.context.get('current_depth', 0)
-
-        if current_depth < max_depth:
-            # Filtramos solo por nodos activos
+        
+        # Si depth es None (comportamiento por defecto)
+        if depth is None:
+            # Solo mostrar hijos directos, PERO los hijos no deben mostrar sus hijos
             active_children = obj.children.filter(is_deleted=False)
             return NodeSerializer(
-                active_children, 
-                many=True, 
+                active_children,
+                many=True,
                 context={
-                    **self.context, 
+                    'language': self.context.get('language', 'en'),
+                    'user_timezone': self.context.get('user_timezone', 'UTC'),
+                    'depth': 0,  # ← CRÍTICO: Poner 0 para que hijos no muestren nietos
                     'current_depth': current_depth + 1
                 }
             ).data
-        return []
+        
+        # Si depth = 0, no mostrar hijos
+        if depth == 0:
+            return []
+        
+        # Si depth > 0 y ya alcanzamos o superamos la profundidad máxima
+        if depth > 0:
+            # Si current_depth + 1 > depth, no podemos mostrar más hijos
+            # Ejemplo: depth=1, current_depth=0 → podemos mostrar hijos
+            #          depth=1, current_depth=1 → NO podemos mostrar nietos
+            if current_depth + 1 > depth:
+                return []
+        
+        # depth=-1 (infinito) o todavía tenemos niveles disponibles
+        active_children = obj.children.filter(is_deleted=False)
+        
+        return NodeSerializer(
+            active_children,
+            many=True,
+            context={
+                'language': self.context.get('language', 'en'),
+                'user_timezone': self.context.get('user_timezone', 'UTC'),
+                'depth': depth,
+                'current_depth': current_depth + 1
+            }
+        ).data
 
+
+    def get_created_at(self, obj):
+        """Convierte created_at a la zona horaria solicitada."""
+        tz_name = self.context.get('user_timezone', 'UTC')
+        
+        utc_datetime = obj.created_at
+        if django_timezone.is_naive(utc_datetime):
+            utc_datetime = django_timezone.make_aware(utc_datetime, django_timezone.utc)
+        
+        try:
+            if tz_name not in pytz.all_timezones:
+                raise pytz.exceptions.UnknownTimeZoneError()
+            
+            user_tz = pytz.timezone(tz_name)
+            local_datetime = utc_datetime.astimezone(user_tz)
+            return local_datetime.strftime('%Y-%m-%d %H:%M:%S')
+            
+        except Exception:
+            fallback_datetime = utc_datetime.astimezone(pytz.UTC)
+            return fallback_datetime.strftime('%Y-%m-%d %H:%M:%S UTC')
+    
     def validate(self, data):
-        """
-        Validaciones de integridad de negocio.
-
-        Incluye la validación de unicidad por nivel y la prevención de auto-referencia.
-
-        :param data: Diccionario de datos validados.
-        :raises serializers.ValidationError: Si se viola la unicidad o auto-referencia.
-        :returns: Diccionario de datos para guardar.
-        """
-        title = data.get('title', getattr(self.instance, 'title', None))
+        """Validaciones de negocio."""
+        content = data.get('content', getattr(self.instance, 'content', None))
         parent = data.get('parent', getattr(self.instance, 'parent', None))
 
-        # 1. Validación de Unicidad por Nivel (Solo contra nodos ACTIVOS)
         queryset = Node.objects.filter(
-            title__iexact=title, 
+            content__iexact=content, 
             parent=parent, 
             is_deleted=False
         )
@@ -109,29 +128,32 @@ class NodeSerializer(serializers.ModelSerializer):
 
         if queryset.exists():
             raise serializers.ValidationError({
-                "title": f"Ya existe un nodo activo con el título '{title}' en este nivel."
+                "content": f"Ya existe un nodo activo con el contenido '{content}' en este nivel."
             })
 
-        # 2. Validación de auto-referencia (Un nodo no puede ser su propio padre)
         if self.instance and parent and parent.pk == self.instance.pk:
             raise serializers.ValidationError({
                 "parent": "Un nodo no puede ser su propio padre."
             })
 
         return data
-
-    def get_created_at(self, obj):
+    
+    def to_internal_value(self, data):
         """
-        Convierte la fecha de creación (UTC) a la zona horaria solicitada por el cliente.
-
-        :param obj: Instancia del nodo.
-        :returns: La fecha formateada en la zona horaria del cliente.
+        Validación antes de procesar los datos.
+        Útil para operaciones de creación/actualización.
         """
-        tz_name = self.context.get('user_timezone', 'UTC')
-        try:
-            user_tz = pytz.timezone(tz_name)
-            local_dt = obj.created_at.astimezone(user_tz)
-            return local_dt.strftime('%Y-%m-%d %H:%M:%S %Z')
-        except Exception:
-            # Fallback seguro a ISO si la zona horaria no es válida
-            return obj.created_at.isoformat()
+        # Si hay un 'id' en los datos, validarlo
+        if 'id' in data and data['id'] is not None:
+            try:
+                id_value = int(data['id'])
+                if id_value < 1:
+                    raise serializers.ValidationError({
+                        'id': 'El ID debe ser un número positivo mayor o igual a 1.'
+                    })
+            except (ValueError, TypeError):
+                raise serializers.ValidationError({
+                    'id': 'ID inválido. Debe ser un número entero.'
+                })
+        
+        return super().to_internal_value(data)

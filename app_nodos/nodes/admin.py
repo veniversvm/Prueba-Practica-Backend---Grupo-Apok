@@ -1,86 +1,91 @@
+# nodes/admin.py
 from django.contrib import admin
 from .models import Node
-
-# Opcional: Para una mejor interfaz de árbol, necesitarías una librería como 
-# django-mptt o django-treebeard. Pero para esta prueba, usaremos la vista simple 
-# con filtrado.
 
 @admin.register(Node)
 class NodeAdmin(admin.ModelAdmin):
     """
-    Configuración de la interfaz de administración para el modelo Node.
+    Configuración del admin para el modelo Node.
     """
-    list_display = (
-        'title', 
-        'parent', 
-        'is_deleted', 
-        'created_at', 
-        'created_by', 
-        'updated_by'
-    )
     
-    # Permite filtrar por nodo padre para ver la jerarquía por nivel
-    list_filter = (
-        'parent', 
-        'is_deleted',
-    )
+    # Campos a mostrar en la lista
+    list_display = [
+        'id',           # Mostrar ID
+        'content',      # Mostrar contenido (lo que antes era title)
+        'parent',       # Mostrar padre
+        'created_at',   # Mostrar fecha de creación
+        'is_deleted',   # Mostrar estado de borrado
+    ]
     
-    # Búsqueda por título e ID
-    search_fields = (
-        'title', 
-        'id'
-    )
-
-    # Ordenar por defecto para ver los nodos raíz primero
-    ordering = ('parent__isnull', 'title') 
-
-    # Campos de auditoría como solo lectura
-    readonly_fields = (
-        'created_at', 
-        'updated_at', 
-        'created_by', 
-        'updated_by', 
-        'deleted_at'
-    )
-
+    # Campos de solo lectura
+    readonly_fields = [
+        'id',           # ID es auto-generado
+        'created_at',   # Fecha de creación no se edita
+        'updated_at',   # Fecha de actualización no se edita
+        'deleted_at',   # Fecha de borrado no se edita directamente
+    ]
+    
+    # Campos para búsqueda
+    search_fields = [
+        'content',      # Buscar por contenido
+        'id',           # Buscar por ID
+    ]
+    
+    # Filtros
+    list_filter = [
+        'is_deleted',   # Filtrar por estado de borrado
+        'created_at',   # Filtrar por fecha
+        'parent',       # Filtrar por padre
+    ]
+    
+    # Ordenamiento por defecto
+    ordering = ['-created_at']  # Solo por created_at, ya no por title
+    
+    # Jerarquía por padre
+    hierarchy = 'parent'
+    
+    # Campos a mostrar en el formulario de edición
     fieldsets = (
-        (None, {
-            'fields': ('title', 'parent')
+        ('Información Básica', {
+            'fields': ('id', 'content', 'parent')
         }),
-        ('Auditoría y Estado', {
-            'fields': (
-                'is_deleted', 'deleted_at', 
-                'created_at', 'updated_at', 
-                'created_by', 'updated_by'
-            ),
-            'classes': ('collapse',) # Oculta la auditoría para una vista más limpia
+        ('Fechas', {
+            'fields': ('created_at', 'updated_at', 'deleted_at'),
+            'classes': ('collapse',)
+        }),
+        ('Estado', {
+            'fields': ('is_deleted',),
+            'classes': ('collapse',)
         }),
     )
-
-# --- FIN DE NODES/ADMIN.PY ---
-
-# También registramos el modelo de usuario custom en users/admin.py:
-# (Asumiendo que creaste users/admin.py)
-
-from django.contrib.auth.admin import UserAdmin
-from users.models import User
-
-# Desregistrar el UserAdmin por defecto (si ya estuviera registrado)
-try:
-    admin.site.unregister(User)
-except admin.sites.NotRegistered:
-    pass
-
-@admin.register(User)
-class CustomUserAdmin(UserAdmin):
-    """
-    Configuración de la interfaz de administración para el modelo User customizado.
-    """
-    fieldsets = UserAdmin.fieldsets + (
-        (None, {'fields': ('role', 'is_email_confirmed')}),
-    )
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        (None, {'fields': ('role', 'is_email_confirmed')}),
-    )
-    list_display = ('username', 'email', 'role', 'is_email_confirmed', 'is_staff')
-    list_filter = ('role', 'is_email_confirmed', 'is_staff', 'is_active')
+    
+    def get_queryset(self, request):
+        """
+        Personalizar el queryset para el admin.
+        Por defecto mostrar todos, incluidos borrados lógicos.
+        """
+        return Node.objects.all()
+    
+    def has_delete_permission(self, request, obj=None):
+        """
+        Controlar permisos de borrado.
+        Por defecto permitir borrado físico solo para superusuarios.
+        """
+        if obj and obj.children.exists():
+            return False  # No permitir borrar si tiene hijos
+        return super().has_delete_permission(request, obj)
+    
+    def delete_model(self, request, obj):
+        """
+        Sobreescribir borrado para usar soft delete.
+        """
+        obj.soft_delete()
+        self.message_user(request, f"Nodo '{obj.content}' marcado como borrado lógico.")
+    
+    def delete_queryset(self, request, queryset):
+        """
+        Sobreescribir borrado masivo.
+        """
+        for obj in queryset:
+            obj.soft_delete()
+        self.message_user(request, f"{queryset.count()} nodos marcados como borrados lógicos.")

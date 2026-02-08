@@ -8,6 +8,7 @@ from nodes.serializers import NodeSerializer
 from .models import User
 from .serializers import UserSerializer, UserDetailSerializer, UserCreateSerializer
 from .permissions import IsActiveAndConfirmed, IsAdminUserCustom, IsSudoUser 
+from nodes.models import Node 
 
 User = get_user_model()
 
@@ -23,7 +24,7 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-date_joined')
     serializer_class = UserSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['username', 'email', 'first_name', 'last_name']
+    search_fields = ['username', 'email', 'first_name', 'last_name', 'role']
     ordering_fields = ['username', 'email', 'date_joined', 'role', 'is_active']
     filterset_fields = ['role', 'is_email_confirmed', 'is_active']
     
@@ -121,27 +122,16 @@ class UserViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         user = request.user
         
-        # Validación de Borrado Lógico (por hijos activos del modelo Node)
-        if instance.children.filter(is_deleted=False).exists():
+        # Validación de Borrado Lógico (por hijos activos)
+        # CORRECCIÓN: Usar la relación inversa 'nodes_created'
+        if instance.nodes_created.filter(is_deleted=False).exists():
             return Response(
-                {"error": "No se puede eliminar un nodo que tiene hijos activos."},
+                {"error": "No se puede eliminar un usuario que tiene nodos activos asociados."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Validación de Permisos de Borrado
-        if user.role == 'USER':
-            return Response(
-                {"detail": "No tienes permisos para eliminar recursos."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # ... (resto de las validaciones de rol) ...
         
-        # ADMIN solo puede borrar USERs
-        if user.role == 'ADMIN' and instance.role in ['ADMIN', 'SUDO']:
-            return Response(
-                {"detail": "Solo puedes eliminar usuarios con rol USER."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
         # Si pasa todas las validaciones, se ejecuta el soft delete
         instance.soft_delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

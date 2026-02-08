@@ -1,84 +1,178 @@
+# nodes/management/commands/seed_nodes.py
 import random
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.contrib.auth import get_user_model
 from nodes.models import Node
+from num2words import num2words
+import uuid  # Para generar identificadores únicos
 
 User = get_user_model()
 
 class Command(BaseCommand):
-    """
-    Comando de gestión personalizado para poblar la base de datos con
-    una estructura jerárquica de nodos.
-
-    Asegura que cada nodo creado contenga campos de auditoría ('created_by' y
-    'updated_by') asignados a usuarios con roles ADMIN o SUDO.
-    """
-    help = 'Puebla la base de datos con una estructura jerárquica de nodos y auditoría'
+    help = 'Puebla la base de datos con una estructura jerárquica de nodos'
 
     def handle(self, *args, **kwargs):
         self.stdout.write(
-            self.style.WARNING('Iniciando el sembrado de datos con auditoría...')
+            self.style.WARNING('Iniciando el sembrado de datos para el nuevo modelo...')
         )
 
-        # 1. Obtener usuarios capaces de crear nodos (ADMIN y SUDO confirmados)
-        admins = list(
-            User.objects.filter(role__in=['ADMIN', 'SUDO'], is_email_confirmed=True)
-        )
+        # Obtener usuarios administradores
+        admins = list(User.objects.filter(role__in=['ADMIN', 'SUDO']))
         
         if not admins:
+            self.stdout.write(self.style.WARNING(
+                'No hay usuarios ADMIN o SUDO. Usando usuarios regulares...'
+            ))
+            admins = list(User.objects.all()[:3])
+            
+        if not admins:
             self.stdout.write(self.style.ERROR(
-                'No hay usuarios ADMIN o SUDO confirmados. Ejecuta setup_sudo y seed_users primero.'
+                'No hay usuarios en el sistema. Ejecuta seed_users primero.'
             ))
             return
 
         with transaction.atomic():
-            # 2. Limpiar datos existentes
+            # Limpiar datos existentes
             self.stdout.write('Limpiando base de datos de nodos...')
             Node.objects.all().delete()
 
-            # 3. Crear Nodos Raíz (Nivel 0)
-            roots = []
-            root_titles = ["Empresa", "Tecnología", "Recursos", "1", "100"]
+            # Contenidos disponibles (evitar duplicados con sufijos únicos)
+            root_contents = [
+                "Empresa Principal",
+                "Departamento de Tecnología", 
+                "Recursos Humanos",
+                "Finanzas Corporativas",
+                "Proyectos Activos",
+                "Operaciones",
+                "Marketing",
+                "Ventas",
+                "Soporte Técnico",
+                "Investigación y Desarrollo"
+            ]
             
-            for title in root_titles:
-                author = random.choice(admins)  # Seleccionamos un autor al azar
+            child_contents = [
+                "Subdivisión",
+                "Equipo",
+                "Proyecto",
+                "Departamento",
+                "Grupo de Trabajo",
+                "Comité",
+                "Iniciativa",
+                "Programa"
+            ]
+            
+            task_contents = [
+                "Tarea",
+                "Subtarea",
+                "Documentación",
+                "Revisión",
+                "Implementación",
+                "Pruebas",
+                "Despliegue",
+                "Mantenimiento"
+            ]
+            
+            detail_contents = [
+                "Checklist",
+                "Nota",
+                "Comentario",
+                "Observación",
+                "Recordatorio",
+                "Seguimiento",
+                "Actualización",
+                "Corrección"
+            ]
+
+            # 1. Crear Nodos Raíz (Nivel 0)
+            roots = []
+            for i, content in enumerate(root_contents[:7]):  # Tomar solo 7 raíces
                 node = Node.objects.create(
-                    title=title, 
+                    content=f"{content} #{i+1}",
                     parent=None,
-                    created_by=author,
-                    updated_by=author
                 )
                 roots.append(node)
-                self.stdout.write(f'Nodo Raíz creado: {title} (por {author.username})')
+                
+                try:
+                    title = num2words(node.id, lang='es')
+                except:
+                    title = num2words(node.id, lang='en')
+                    
+                self.stdout.write(f'Nodo Raíz creado: ID={node.id}, Content="{node.content}"')
 
-            # 4. Crear Hijos (Nivel 1)
-            for root in roots:
-                for i in range(1, 4):
-                    author = random.choice(admins)
-                    # El título incluye números para probar la conversión
-                    title = random.choice([f"Sub-{root.title} {i}", str(random.randint(2, 50))])
+            # 2. Crear Hijos (Nivel 1)
+            child_nodes = []
+            for root_idx, root in enumerate(roots):
+                for i in range(1, random.randint(2, 4)):  # 1-3 hijos por raíz
+                    child_type = random.choice(child_contents)
+                    child_content = f"{child_type} {chr(64+i)} de {root.content}"
                     
                     child = Node.objects.create(
-                        title=title, 
+                        content=child_content,
                         parent=root,
-                        created_by=author,
-                        updated_by=author
                     )
+                    child_nodes.append(child)
                     
-                    # 5. Crear Nietos (Nivel 2) para el 50% de los hijos
-                    if random.choice([True, False]):
-                        for j in range(1, 3):
-                            author = random.choice(admins)
-                            grandchild_title = str(random.randint(51, 999))
-                            
-                            Node.objects.create(
-                                title=grandchild_title, 
-                                parent=child,
-                                created_by=author,
-                                updated_by=author
-                            )
+                    self.stdout.write(f'  ├─ Hijo creado: ID={child.id}, Content="{child_content}"')
 
-        self.stdout.write(
-            self.style.SUCCESS('¡Seeder de nodos completado con auditoría exitosa!')
-        )
+                    # 3. Crear Nietos (Nivel 2) - 60% de probabilidad
+                    if random.random() < 0.6:
+                        for j in range(1, random.randint(2, 4)):  # 1-3 nietos
+                            task_type = random.choice(task_contents)
+                            # Asegurar unicidad con ID único
+                            unique_id = str(uuid.uuid4())[:8]
+                            grandchild_content = f"{task_type} {j}.{i} - {unique_id}"
+                            
+                            grandchild = Node.objects.create(
+                                content=grandchild_content,
+                                parent=child,
+                            )
+                            
+                            self.stdout.write(f'  │   └─ Nieto creado: ID={grandchild.id}, Content="{grandchild_content}"')
+
+                            # 4. Crear Bisnietos (Nivel 3) - 30% de probabilidad
+                            if random.random() < 0.3:
+                                for k in range(1, random.randint(2, 3)):  # 1-2 bisnietos
+                                    detail_type = random.choice(detail_contents)
+                                    detail_unique_id = str(uuid.uuid4())[:6]
+                                    great_grandchild_content = f"{detail_type} {k}.{j}.{i} - {detail_unique_id}"
+                                    
+                                    Node.objects.create(
+                                        content=great_grandchild_content,
+                                        parent=grandchild,
+                                    )
+                                    self.stdout.write(f'  │       └─ Bisnieto creado: Content="{great_grandchild_content}"')
+
+            # 5. Crear algunos nodos hoja únicos
+            self.stdout.write('\nCreando nodos hoja adicionales...')
+            for i in range(5):
+                leaf_unique_id = str(uuid.uuid4())[:8]
+                leaf_content = f"Nodo Independiente #{i+1} - {leaf_unique_id}"
+                
+                Node.objects.create(
+                    content=leaf_content,
+                    parent=random.choice(roots) if random.choice([True, False]) else None,
+                )
+                self.stdout.write(f'Nodo hoja creado: "{leaf_content}"')
+
+            # 6. Crear algunos nodos con números (para probar title)
+            self.stdout.write('\nCreando nodos con contenido numérico...')
+            for i in range(3):
+                numeric_content = str(random.randint(1000, 99999))
+                Node.objects.create(
+                    content=f"Número {numeric_content}",
+                    parent=random.choice(roots) if i % 2 == 0 else None,
+                )
+                self.stdout.write(f'Nodo numérico creado: "{numeric_content}"')
+
+            # 7. Estadísticas finales
+            total_nodes = Node.objects.count()
+            root_count = Node.objects.filter(parent__isnull=True).count()
+            leaf_count = Node.objects.filter(children__isnull=True).count()
+            
+            self.stdout.write('\n' + '='*50)
+            self.stdout.write(self.style.SUCCESS('¡Seeder de nodos completado exitosamente!'))
+            self.stdout.write(f'Total de nodos creados: {total_nodes}')
+            self.stdout.write(f'Nodos raíz: {root_count}')
+            self.stdout.write(f'Nodos hoja: {leaf_count}')
+            self.stdout.write('='*50)

@@ -1,30 +1,26 @@
-import re
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
-from django.db.models import Q
-
-from nodes.models import Node # Importado para el conteo de nodos en DetailSerializer
+from nodes.models import Node  # Importación necesaria para auditoría
 
 User = get_user_model()
 
 
 class UserSerializer(serializers.ModelSerializer):
     """
-    Serializer base para operaciones generales de lectura/actualización de usuarios.
+    Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).
 
-    Campos clave:
-    - 'password': WRITE_ONLY, requerido solo en creación/actualización de contraseña.
-    - Campos de auditoría de nodos ('nodes_created_count' en DetailSerializer)
-      se exponen como READ_ONLY.
+    Características:
+    - Permite actualizaciones parciales sin exigir 'email' o 'username' obligatoriamente.
+    - La contraseña es 'write_only' (nunca se lee, solo se escribe).
+    - Incluye validaciones de unicidad personalizadas para permitir editar el propio perfil.
     """
     password = serializers.CharField(
-        write_only=True, 
-        required=False, 
+        write_only=True,
+        required=False,
         style={'input_type': 'password'},
-        help_text="Contraseña. Se ignora en el listado, requerida en el POST/PUT."
+        help_text="Dejar en blanco para mantener la contraseña actual."
     )
-    
+
     class Meta:
         model = User
         fields = [
@@ -35,14 +31,16 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'date_joined', 'last_login', 'is_staff', 'is_superuser'
         ]
+        # SOLUCIÓN AL ERROR DE VALIDACIÓN EN UPDATE:
+        # Establecemos required=False para permitir PATCH/PUT sin enviar estos campos.
         extra_kwargs = {
-            'email': {'required': True},
-            'username': {'required': True}
+            'email': {'required': False},
+            'username': {'required': False}
         }
-    
+
     def validate_role(self, value):
         """
-        Valida que solo usuarios SUDO puedan asignar el rol SUDO a otro usuario.
+        Valida que solo un usuario con rol SUDO pueda asignar el rol SUDO a otro.
         """
         request = self.context.get('request')
         if request and value == 'SUDO':
@@ -51,102 +49,110 @@ class UserSerializer(serializers.ModelSerializer):
                     "Solo los usuarios SUDO pueden asignar el rol SUDO."
                 )
         return value
-    
+
     def validate_email(self, value):
         """
-        Valida la unicidad del email, permitiendo que la instancia actual mantenga el suyo.
+        Valida que el email sea único en el sistema.
+        Excluye a la instancia actual de la comprobación para permitir auto-edición.
         """
-        if User.objects.filter(email__iexact=value).exists():
-            if self.instance and self.instance.email.lower() == value.lower():
-                return value  # Permite actualizar el email a sí mismo
+        # Verificamos si existe otro usuario con este email
+        # .exclude(pk=self.instance.pk) evita que falle si el usuario guarda su propio email
+        query = User.objects.filter(email__iexact=value)
+        if self.instance:
+            query = query.exclude(pk=self.instance.pk)
+
+        if query.exists():
             raise serializers.ValidationError("Este email ya está registrado.")
-        return value
-    
-    def create(self, validated_data):
-        """Crea un nuevo usuario con contraseña encriptada."""
-        password = validated_data.pop('password', None)
-        user = User.objects.create(**validated_data)
-        if password:
-            user.set_password(password)
-        user.save()
-        return user
-    
-    def update(self, instance, validated_data):
-        """Actualiza un usuario existente, manejando la contraseña si se proporciona."""
-        password = validated_data.pop('password', None)
         
+        return value
+
+    def update(self, instance, validated_data):
+        """
+        Actualiza la instancia del usuario.
+        Maneja el hash de la contraseña si se proporciona una nueva.
+        """
+        password = validated_data.pop('password', None)
+
+        # Actualiza los campos estándar
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        
+
+        # Si se envió password, se hashea y guarda
         if password:
             instance.set_password(password)
-        
+
         instance.save()
         return instance
 
 
 class UserDetailSerializer(UserSerializer):
     """
-    Serializer específico para la vista de detalle de usuario.
-    Expone métricas de auditoría de nodos creados.
+    Serializer extendido para la vista de detalle (GET /users/{id}/).
+    Incluye métricas adicionales de auditoría (conteo de nodos).
     """
     nodes_created_count = serializers.SerializerMethodField(
-        help_text="Número total de nodos activos creados por este usuario."
+        help_text="Cantidad de nodos activos creados por este usuario."
     )
-    
+
     class Meta(UserSerializer.Meta):
-        # Añadimos el campo de conteo al listado de campos
         fields = UserSerializer.Meta.fields + ['nodes_created_count']
-    
+
     def get_nodes_created_count(self, obj):
-        """Calcula y retorna el número de nodos activos creados por el usuario."""
+        """Retorna el número de nodos creados que no han sido borrados lógicamente."""
         return Node.objects.filter(created_by=obj, is_deleted=False).count()
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
     """
-    Serializer específico para el registro de nuevos usuarios (POST /users/).
-    Aplica validaciones estrictas de contraseña y rol durante la creación.
+    Serializer exclusivo para la creación de nuevos usuarios (POST).
+    Difiere del base en que aquí los campos principales SÍ son obligatorios.
     """
     password = serializers.CharField(
-        write_only=True, 
-        required=True, 
+        write_only=True,
+        required=True,
         style={'input_type': 'password'},
         min_length=8,
-        help_text="Contraseña mínima de 8 caracteres."
+        help_text="Contraseña obligatoria (mínimo 8 caracteres)."
     )
     password_confirm = serializers.CharField(
-        write_only=True, 
-        required=True, 
+        write_only=True,
+        required=True,
         style={'input_type': 'password'},
         help_text="Confirmación de la contraseña."
     )
-    
+
     class Meta:
         model = User
-        fields = ['username', 'email', 'password', 'password_confirm', 'role', 'first_name', 'last_name']
-    
+        fields = [
+            'username', 'email', 'password', 'password_confirm', 
+            'role', 'first_name', 'last_name'
+        ]
+        # Nota: Al crear, username y email son required=True por defecto en el modelo.
+
     def validate(self, data):
-        """Valida que las contraseñas coincidan antes de la validación de rol."""
+        """Valida que las contraseñas coincidan."""
         if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError({"password_confirm": "Las contraseñas no coinciden."})
+            raise serializers.ValidationError(
+                {"password_confirm": "Las contraseñas no coinciden."}
+            )
         return data
-    
+
     def validate_role(self, value):
-        """Valida la restricción del rol SUDO al crear un nuevo usuario."""
+        """Aplica la restricción de privilegios para la creación de SUDO."""
         request = self.context.get('request')
         if request and value == 'SUDO':
-            # El SUDO solo puede ser asignado por otro SUDO
             if request.user.role != 'SUDO':
-                raise serializers.ValidationError("Solo los usuarios SUDO pueden crear otros usuarios SUDO.")
+                raise serializers.ValidationError(
+                    "Solo los usuarios SUDO pueden crear otros usuarios SUDO."
+                )
         return value
-    
+
     def create(self, validated_data):
-        """Crea el usuario, hashea la contraseña e inicializa is_email_confirmed a False."""
+        """Crea el usuario, hashea la contraseña y guarda."""
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
-        
-        # is_email_confirmed se establece a False por defecto en el modelo si no se pasa
+
+        # is_email_confirmed por defecto es False (o lo que diga el modelo)
         user = User.objects.create(**validated_data)
         user.set_password(password)
         user.save()
