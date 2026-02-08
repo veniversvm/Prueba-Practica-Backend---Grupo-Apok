@@ -9,7 +9,32 @@
         "/api/nodes/": {
             "get": {
                 "operationId": "nodes_list",
-                "description": "Lista los nodos raíz.\nEl resultado es cacheado por 180 segundos y versionado.",
+                "description": "\nObtiene todos los nodos raíz del árbol jerárquico.\n\n**Características:**\n- Parámetro `depth` controla la profundidad (default: solo hijos directos)\n- Header `Accept-Language` define el idioma para el campo `title`\n- Header `Time-Zone` ajusta la zona horaria de `created_at`\n- Cache automático de 180 segundos\n\n**Ejemplos de uso:**\n- `GET /api/nodes/` - Solo hijos directos (default)\n- `GET /api/nodes/?depth=2` - Hasta nietos\n- `GET /api/nodes/?depth=-1` - Profundidad infinita (limitada a 10 niveles)\n",
+                "summary": "Listar nodos raíz",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "depth",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "\nNiveles de profundidad a mostrar:\n- `null` o no especificado: solo hijos directos (default)\n- `0`: sin hijos\n- `1`: hijos directos\n- `2`: hijos + nietos\n- `-1`: profundidad infinita (limitada a 10 niveles)\n",
+                        "examples": {
+                            "Default(sinParámetro)": {
+                                "value": null,
+                                "summary": "Default (sin parámetro)"
+                            },
+                            "Profundidad2Niveles": {
+                                "value": 2,
+                                "summary": "Profundidad 2 niveles"
+                            },
+                            "ProfundidadInfinita": {
+                                "value": -1,
+                                "summary": "Profundidad infinita"
+                            }
+                        }
+                    }
+                ],
                 "tags": [
                     "nodes"
                 ],
@@ -27,16 +52,99 @@
                                     "items": {
                                         "$ref": "#/components/schemas/Node"
                                     }
+                                },
+                                "examples": {
+                                    "EjemploDeNodoRaíz": {
+                                        "value": [
+                                            {
+                                                "id": 1,
+                                                "content": "Nodo raíz",
+                                                "title": "one",
+                                                "parent": null,
+                                                "created_at": "2024-01-15 10:00:00",
+                                                "children": [
+                                                    {
+                                                        "id": 2,
+                                                        "content": "Hijo",
+                                                        "title": "two",
+                                                        "parent": 1,
+                                                        "created_at": "2024-01-15 10:05:00",
+                                                        "children": []
+                                                    }
+                                                ]
+                                            }
+                                        ],
+                                        "summary": "Ejemplo de nodo raíz",
+                                        "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                    },
+                                    "EjemploDeNodoConProfundidad2": {
+                                        "value": [
+                                            {
+                                                "id": 1,
+                                                "content": "Nodo raíz",
+                                                "title": "uno",
+                                                "parent": null,
+                                                "created_at": "2024-01-15 10:00:00",
+                                                "children": [
+                                                    {
+                                                        "id": 2,
+                                                        "content": "Hijo",
+                                                        "title": "dos",
+                                                        "parent": 1,
+                                                        "created_at": "2024-01-15 10:05:00",
+                                                        "children": [
+                                                            {
+                                                                "id": 3,
+                                                                "content": "Nieto",
+                                                                "title": "tres",
+                                                                "parent": 2,
+                                                                "created_at": "2024-01-15 10:07:00",
+                                                                "children": []
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ],
+                                        "summary": "Ejemplo de nodo con profundidad 2",
+                                        "description": "Ejemplo con depth=2 (hasta nietos)"
+                                    },
+                                    "EjemploDeNodoHoja": {
+                                        "value": [
+                                            {
+                                                "id": 4,
+                                                "content": "Nodo hoja",
+                                                "title": "four",
+                                                "parent": 2,
+                                                "created_at": "2024-01-15 10:08:00",
+                                                "children": []
+                                            }
+                                        ],
+                                        "summary": "Ejemplo de nodo hoja",
+                                        "description": "Ejemplo de nodo sin hijos"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "No autenticado"
                     }
                 }
             },
             "post": {
                 "operationId": "nodes_create",
-                "description": "ViewSet para la gestión jerárquica de nodos.\n\nCaracterísticas:\n- Soft delete\n- Permisos personalizados\n- Cache del listado con invalidación por versión",
+                "description": "\nCrea un nuevo nodo en el árbol.\n\n**Permisos requeridos:** Rol ADMIN o SUDO\n",
+                "summary": "Crear nuevo nodo",
                 "tags": [
                     "nodes"
                 ],
@@ -45,6 +153,71 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/Node"
+                            },
+                            "examples": {
+                                "EjemploDeNodoRaíz": {
+                                    "value": {
+                                        "id": 1,
+                                        "content": "Nodo raíz",
+                                        "title": "one",
+                                        "parent": null,
+                                        "created_at": "2024-01-15 10:00:00",
+                                        "children": [
+                                            {
+                                                "id": 2,
+                                                "content": "Hijo",
+                                                "title": "two",
+                                                "parent": 1,
+                                                "created_at": "2024-01-15 10:05:00",
+                                                "children": []
+                                            }
+                                        ]
+                                    },
+                                    "summary": "Ejemplo de nodo raíz",
+                                    "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                },
+                                "EjemploDeNodoConProfundidad2": {
+                                    "value": {
+                                        "id": 1,
+                                        "content": "Nodo raíz",
+                                        "title": "uno",
+                                        "parent": null,
+                                        "created_at": "2024-01-15 10:00:00",
+                                        "children": [
+                                            {
+                                                "id": 2,
+                                                "content": "Hijo",
+                                                "title": "dos",
+                                                "parent": 1,
+                                                "created_at": "2024-01-15 10:05:00",
+                                                "children": [
+                                                    {
+                                                        "id": 3,
+                                                        "content": "Nieto",
+                                                        "title": "tres",
+                                                        "parent": 2,
+                                                        "created_at": "2024-01-15 10:07:00",
+                                                        "children": []
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "summary": "Ejemplo de nodo con profundidad 2",
+                                    "description": "Ejemplo con depth=2 (hasta nietos)"
+                                },
+                                "EjemploDeNodoHoja": {
+                                    "value": {
+                                        "id": 4,
+                                        "content": "Nodo hoja",
+                                        "title": "four",
+                                        "parent": 2,
+                                        "created_at": "2024-01-15 10:08:00",
+                                        "children": []
+                                    },
+                                    "summary": "Ejemplo de nodo hoja",
+                                    "description": "Ejemplo de nodo sin hijos"
+                                }
                             }
                         },
                         "application/x-www-form-urlencoded": {
@@ -71,10 +244,97 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Node"
+                                },
+                                "examples": {
+                                    "EjemploDeNodoRaíz": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "one",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "two",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": []
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo raíz",
+                                        "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                    },
+                                    "EjemploDeNodoConProfundidad2": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "uno",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "dos",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": [
+                                                        {
+                                                            "id": 3,
+                                                            "content": "Nieto",
+                                                            "title": "tres",
+                                                            "parent": 2,
+                                                            "created_at": "2024-01-15 10:07:00",
+                                                            "children": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo con profundidad 2",
+                                        "description": "Ejemplo con depth=2 (hasta nietos)"
+                                    },
+                                    "EjemploDeNodoHoja": {
+                                        "value": {
+                                            "id": 4,
+                                            "content": "Nodo hoja",
+                                            "title": "four",
+                                            "parent": 2,
+                                            "created_at": "2024-01-15 10:08:00",
+                                            "children": []
+                                        },
+                                        "summary": "Ejemplo de nodo hoja",
+                                        "description": "Ejemplo de nodo sin hijos"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "\nErrores de validación:\n- Content duplicado en mismo nivel\n- Auto-referencia\n"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Permisos insuficientes"
                     }
                 }
             }
@@ -82,8 +342,33 @@
         "/api/nodes/{id}/": {
             "get": {
                 "operationId": "nodes_retrieve",
-                "description": "ViewSet para la gestión jerárquica de nodos.\n\nCaracterísticas:\n- Soft delete\n- Permisos personalizados\n- Cache del listado con invalidación por versión",
+                "description": "Obtiene un nodo específico con sus descendientes según profundidad.",
+                "summary": "Obtener nodo específico",
                 "parameters": [
+                    {
+                        "in": "header",
+                        "name": "Accept-Language",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Idioma para el campo title (ej: es, en, fr)"
+                    },
+                    {
+                        "in": "header",
+                        "name": "Time-Zone",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Zona horaria para created_at (ej: UTC, America/New_York)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "depth",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Niveles de profundidad a mostrar"
+                    },
                     {
                         "in": "path",
                         "name": "id",
@@ -108,16 +393,104 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Node"
+                                },
+                                "examples": {
+                                    "EjemploDeNodoRaíz": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "one",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "two",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": []
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo raíz",
+                                        "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                    },
+                                    "EjemploDeNodoConProfundidad2": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "uno",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "dos",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": [
+                                                        {
+                                                            "id": 3,
+                                                            "content": "Nieto",
+                                                            "title": "tres",
+                                                            "parent": 2,
+                                                            "created_at": "2024-01-15 10:07:00",
+                                                            "children": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo con profundidad 2",
+                                        "description": "Ejemplo con depth=2 (hasta nietos)"
+                                    },
+                                    "EjemploDeNodoHoja": {
+                                        "value": {
+                                            "id": 4,
+                                            "content": "Nodo hoja",
+                                            "title": "four",
+                                            "parent": 2,
+                                            "created_at": "2024-01-15 10:08:00",
+                                            "children": []
+                                        },
+                                        "summary": "Ejemplo de nodo hoja",
+                                        "description": "Ejemplo de nodo sin hijos"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "\nErrores de validación:\n- ID debe ser ≥ 1\n- ID inválido (no numérico)\n"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Nodo no encontrado"
                     }
                 }
             },
             "put": {
                 "operationId": "nodes_update",
-                "description": "ViewSet para la gestión jerárquica de nodos.\n\nCaracterísticas:\n- Soft delete\n- Permisos personalizados\n- Cache del listado con invalidación por versión",
+                "description": "Actualiza todos los campos de un nodo existente.",
+                "summary": "Actualizar nodo completo",
                 "parameters": [
                     {
                         "in": "path",
@@ -137,6 +510,71 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/Node"
+                            },
+                            "examples": {
+                                "EjemploDeNodoRaíz": {
+                                    "value": {
+                                        "id": 1,
+                                        "content": "Nodo raíz",
+                                        "title": "one",
+                                        "parent": null,
+                                        "created_at": "2024-01-15 10:00:00",
+                                        "children": [
+                                            {
+                                                "id": 2,
+                                                "content": "Hijo",
+                                                "title": "two",
+                                                "parent": 1,
+                                                "created_at": "2024-01-15 10:05:00",
+                                                "children": []
+                                            }
+                                        ]
+                                    },
+                                    "summary": "Ejemplo de nodo raíz",
+                                    "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                },
+                                "EjemploDeNodoConProfundidad2": {
+                                    "value": {
+                                        "id": 1,
+                                        "content": "Nodo raíz",
+                                        "title": "uno",
+                                        "parent": null,
+                                        "created_at": "2024-01-15 10:00:00",
+                                        "children": [
+                                            {
+                                                "id": 2,
+                                                "content": "Hijo",
+                                                "title": "dos",
+                                                "parent": 1,
+                                                "created_at": "2024-01-15 10:05:00",
+                                                "children": [
+                                                    {
+                                                        "id": 3,
+                                                        "content": "Nieto",
+                                                        "title": "tres",
+                                                        "parent": 2,
+                                                        "created_at": "2024-01-15 10:07:00",
+                                                        "children": []
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "summary": "Ejemplo de nodo con profundidad 2",
+                                    "description": "Ejemplo con depth=2 (hasta nietos)"
+                                },
+                                "EjemploDeNodoHoja": {
+                                    "value": {
+                                        "id": 4,
+                                        "content": "Nodo hoja",
+                                        "title": "four",
+                                        "parent": 2,
+                                        "created_at": "2024-01-15 10:08:00",
+                                        "children": []
+                                    },
+                                    "summary": "Ejemplo de nodo hoja",
+                                    "description": "Ejemplo de nodo sin hijos"
+                                }
                             }
                         },
                         "application/x-www-form-urlencoded": {
@@ -163,16 +601,115 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Node"
+                                },
+                                "examples": {
+                                    "EjemploDeNodoRaíz": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "one",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "two",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": []
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo raíz",
+                                        "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                    },
+                                    "EjemploDeNodoConProfundidad2": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "uno",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "dos",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": [
+                                                        {
+                                                            "id": 3,
+                                                            "content": "Nieto",
+                                                            "title": "tres",
+                                                            "parent": 2,
+                                                            "created_at": "2024-01-15 10:07:00",
+                                                            "children": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo con profundidad 2",
+                                        "description": "Ejemplo con depth=2 (hasta nietos)"
+                                    },
+                                    "EjemploDeNodoHoja": {
+                                        "value": {
+                                            "id": 4,
+                                            "content": "Nodo hoja",
+                                            "title": "four",
+                                            "parent": 2,
+                                            "created_at": "2024-01-15 10:08:00",
+                                            "children": []
+                                        },
+                                        "summary": "Ejemplo de nodo hoja",
+                                        "description": "Ejemplo de nodo sin hijos"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Error de validación"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Permisos insuficientes"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Nodo no encontrado"
                     }
                 }
             },
             "patch": {
                 "operationId": "nodes_partial_update",
-                "description": "ViewSet para la gestión jerárquica de nodos.\n\nCaracterísticas:\n- Soft delete\n- Permisos personalizados\n- Cache del listado con invalidación por versión",
+                "description": "Actualiza campos específicos de un nodo existente.",
+                "summary": "Actualizar nodo parcialmente",
                 "parameters": [
                     {
                         "in": "path",
@@ -192,6 +729,71 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/PatchedNode"
+                            },
+                            "examples": {
+                                "EjemploDeNodoRaíz": {
+                                    "value": {
+                                        "id": 1,
+                                        "content": "Nodo raíz",
+                                        "title": "one",
+                                        "parent": null,
+                                        "created_at": "2024-01-15 10:00:00",
+                                        "children": [
+                                            {
+                                                "id": 2,
+                                                "content": "Hijo",
+                                                "title": "two",
+                                                "parent": 1,
+                                                "created_at": "2024-01-15 10:05:00",
+                                                "children": []
+                                            }
+                                        ]
+                                    },
+                                    "summary": "Ejemplo de nodo raíz",
+                                    "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                },
+                                "EjemploDeNodoConProfundidad2": {
+                                    "value": {
+                                        "id": 1,
+                                        "content": "Nodo raíz",
+                                        "title": "uno",
+                                        "parent": null,
+                                        "created_at": "2024-01-15 10:00:00",
+                                        "children": [
+                                            {
+                                                "id": 2,
+                                                "content": "Hijo",
+                                                "title": "dos",
+                                                "parent": 1,
+                                                "created_at": "2024-01-15 10:05:00",
+                                                "children": [
+                                                    {
+                                                        "id": 3,
+                                                        "content": "Nieto",
+                                                        "title": "tres",
+                                                        "parent": 2,
+                                                        "created_at": "2024-01-15 10:07:00",
+                                                        "children": []
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "summary": "Ejemplo de nodo con profundidad 2",
+                                    "description": "Ejemplo con depth=2 (hasta nietos)"
+                                },
+                                "EjemploDeNodoHoja": {
+                                    "value": {
+                                        "id": 4,
+                                        "content": "Nodo hoja",
+                                        "title": "four",
+                                        "parent": 2,
+                                        "created_at": "2024-01-15 10:08:00",
+                                        "children": []
+                                    },
+                                    "summary": "Ejemplo de nodo hoja",
+                                    "description": "Ejemplo de nodo sin hijos"
+                                }
                             }
                         },
                         "application/x-www-form-urlencoded": {
@@ -217,16 +819,115 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/Node"
+                                },
+                                "examples": {
+                                    "EjemploDeNodoRaíz": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "one",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "two",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": []
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo raíz",
+                                        "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                    },
+                                    "EjemploDeNodoConProfundidad2": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "uno",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "dos",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": [
+                                                        {
+                                                            "id": 3,
+                                                            "content": "Nieto",
+                                                            "title": "tres",
+                                                            "parent": 2,
+                                                            "created_at": "2024-01-15 10:07:00",
+                                                            "children": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo con profundidad 2",
+                                        "description": "Ejemplo con depth=2 (hasta nietos)"
+                                    },
+                                    "EjemploDeNodoHoja": {
+                                        "value": {
+                                            "id": 4,
+                                            "content": "Nodo hoja",
+                                            "title": "four",
+                                            "parent": 2,
+                                            "created_at": "2024-01-15 10:08:00",
+                                            "children": []
+                                        },
+                                        "summary": "Ejemplo de nodo hoja",
+                                        "description": "Ejemplo de nodo sin hijos"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Error de validación"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Permisos insuficientes"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Nodo no encontrado"
                     }
                 }
             },
             "delete": {
                 "operationId": "nodes_destroy",
-                "description": "Borrado lógico de un nodo hoja.",
+                "description": "\nElimina lógicamente un nodo.\n\n**Restricciones:**\n- No se puede eliminar nodos con hijos activos\n- Solo elimina nodos hoja\n- Es un borrado lógico (is_deleted=True)\n\n**Respuesta exitosa:** 200 OK con mensaje de confirmación\n**Error:** 400 Bad Request si tiene hijos activos\n",
+                "summary": "Eliminar nodo (soft delete)",
                 "parameters": [
                     {
                         "in": "path",
@@ -247,8 +948,200 @@
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No response body"
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "examples": {
+                                    "EjemploRespuesta": {
+                                        "value": {
+                                            "message": "Nodo 5 eliminado exitosamente.",
+                                            "id": 5
+                                        },
+                                        "summary": "Ejemplo respuesta"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Eliminación exitosa"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                },
+                                "examples": {
+                                    "Error:TieneHijos": {
+                                        "value": {
+                                            "error": "No se puede eliminar un nodo que tiene hijos activos.",
+                                            "code": "has_children"
+                                        },
+                                        "summary": "Error: tiene hijos"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "\nErrores:\n- El nodo tiene hijos activos (code: has_children)\n- ID inválido (< 1 o no numérico)\n"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Permisos insuficientes"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Nodo no encontrado"
+                    }
+                }
+            }
+        },
+        "/api/nodes/{id}/descendants/": {
+            "get": {
+                "operationId": "nodes_descendants_retrieve",
+                "description": "Obtiene todos los descendientes de un nodo específico.",
+                "summary": "Obtener descendientes de un nodo",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "depth",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Niveles de profundidad a mostrar"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this Nodo.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "nodes"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Node"
+                                },
+                                "examples": {
+                                    "EjemploDeNodoRaíz": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "one",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "two",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": []
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo raíz",
+                                        "description": "Ejemplo de nodo raíz con un hijo (depth=None o depth=1)"
+                                    },
+                                    "EjemploDeNodoConProfundidad2": {
+                                        "value": {
+                                            "id": 1,
+                                            "content": "Nodo raíz",
+                                            "title": "uno",
+                                            "parent": null,
+                                            "created_at": "2024-01-15 10:00:00",
+                                            "children": [
+                                                {
+                                                    "id": 2,
+                                                    "content": "Hijo",
+                                                    "title": "dos",
+                                                    "parent": 1,
+                                                    "created_at": "2024-01-15 10:05:00",
+                                                    "children": [
+                                                        {
+                                                            "id": 3,
+                                                            "content": "Nieto",
+                                                            "title": "tres",
+                                                            "parent": 2,
+                                                            "created_at": "2024-01-15 10:07:00",
+                                                            "children": []
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        "summary": "Ejemplo de nodo con profundidad 2",
+                                        "description": "Ejemplo con depth=2 (hasta nietos)"
+                                    },
+                                    "EjemploDeNodoHoja": {
+                                        "value": {
+                                            "id": 4,
+                                            "content": "Nodo hoja",
+                                            "title": "four",
+                                            "parent": 2,
+                                            "created_at": "2024-01-15 10:08:00",
+                                            "children": []
+                                        },
+                                        "summary": "Ejemplo de nodo hoja",
+                                        "description": "Ejemplo de nodo sin hijos"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "ID inválido (< 1 o no numérico)"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Nodo no encontrado"
                     }
                 }
             }
@@ -525,8 +1418,7 @@
                                 "$ref": "#/components/schemas/User"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -716,8 +1608,7 @@
                                 "$ref": "#/components/schemas/User"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -762,8 +1653,7 @@
                                 "$ref": "#/components/schemas/User"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {
@@ -832,16 +1722,20 @@
         "schemas": {
             "Node": {
                 "type": "object",
-                "description": "Serializador para el modelo Node.\n\nGestiona la transformación del 'title' (número a palabra) y\nla representación jerárquica con profundidad dinámica.\nTambién implementa la lógica de auditoría y localización de fechas.",
+                "description": "Serializador para el modelo Node con características avanzadas:\n\n**Campos calculados dinámicamente:**\n1. **title**: Representación textual del ID según idioma del header Accept-Language\n   - Ejemplo: ID=1 → \"one\" (en), \"uno\" (es), \"un\" (fr)\n   - Idiomas soportados: en, es, fr, de, it, pt, ru, ar\n   - Fallback a inglés si idioma no soportado\n\n2. **children**: Lista de hijos con control de profundidad recursiva\n   - Controlado por parámetro de query ?depth=N\n   - Lógica de profundidad:\n     - depth=None: solo hijos directos (default)\n     - depth=0: sin hijos\n     - depth=1: hijos directos (sin nietos)\n     - depth=2: hijos + nietos\n     - depth=-1: todos los niveles (limitado a 10 por seguridad)\n\n3. **created_at**: Fecha de creación en zona horaria personalizada\n   - Se ajusta según header Time-Zone\n   - Formato: \"YYYY-MM-DD HH:MM:SS\"\n   - Fallback a UTC si zona horaria inválida\n\n**Validaciones implementadas:**\n- Unicidad: No puede haber dos nodos con mismo content bajo mismo parent\n- Auto-referencia: Un nodo no puede ser su propio padre\n- ID validation: IDs deben ser ≥ 1 (solo lectura, generado automáticamente)",
                 "properties": {
                     "id": {
                         "type": "integer",
                         "readOnly": true
                     },
+                    "content": {
+                        "type": "string",
+                        "description": "Contenido o descripción del nodo.",
+                        "maxLength": 255
+                    },
                     "title": {
                         "type": "string",
-                        "description": "Título del nodo. Puede ser la representación textual de un número.",
-                        "maxLength": 255
+                        "readOnly": true
                     },
                     "parent": {
                         "type": "integer",
@@ -850,46 +1744,37 @@
                     },
                     "children": {
                         "type": "string",
-                        "readOnly": true,
-                        "description": "Lista de nodos hijos (recursividad limitada por depth)."
+                        "readOnly": true
                     },
                     "created_at": {
                         "type": "string",
-                        "readOnly": true,
-                        "description": "Fecha de creación ajustada a la zona horaria del cliente."
-                    },
-                    "created_by_name": {
-                        "type": "string",
-                        "description": "Nombre del usuario que creó el nodo.",
-                        "readOnly": true
-                    },
-                    "updated_by_name": {
-                        "type": "string",
-                        "description": "Nombre del usuario que modificó por última vez el nodo.",
                         "readOnly": true
                     }
                 },
                 "required": [
                     "children",
+                    "content",
                     "created_at",
-                    "created_by_name",
                     "id",
-                    "title",
-                    "updated_by_name"
+                    "title"
                 ]
             },
             "PatchedNode": {
                 "type": "object",
-                "description": "Serializador para el modelo Node.\n\nGestiona la transformación del 'title' (número a palabra) y\nla representación jerárquica con profundidad dinámica.\nTambién implementa la lógica de auditoría y localización de fechas.",
+                "description": "Serializador para el modelo Node con características avanzadas:\n\n**Campos calculados dinámicamente:**\n1. **title**: Representación textual del ID según idioma del header Accept-Language\n   - Ejemplo: ID=1 → \"one\" (en), \"uno\" (es), \"un\" (fr)\n   - Idiomas soportados: en, es, fr, de, it, pt, ru, ar\n   - Fallback a inglés si idioma no soportado\n\n2. **children**: Lista de hijos con control de profundidad recursiva\n   - Controlado por parámetro de query ?depth=N\n   - Lógica de profundidad:\n     - depth=None: solo hijos directos (default)\n     - depth=0: sin hijos\n     - depth=1: hijos directos (sin nietos)\n     - depth=2: hijos + nietos\n     - depth=-1: todos los niveles (limitado a 10 por seguridad)\n\n3. **created_at**: Fecha de creación en zona horaria personalizada\n   - Se ajusta según header Time-Zone\n   - Formato: \"YYYY-MM-DD HH:MM:SS\"\n   - Fallback a UTC si zona horaria inválida\n\n**Validaciones implementadas:**\n- Unicidad: No puede haber dos nodos con mismo content bajo mismo parent\n- Auto-referencia: Un nodo no puede ser su propio padre\n- ID validation: IDs deben ser ≥ 1 (solo lectura, generado automáticamente)",
                 "properties": {
                     "id": {
                         "type": "integer",
                         "readOnly": true
                     },
+                    "content": {
+                        "type": "string",
+                        "description": "Contenido o descripción del nodo.",
+                        "maxLength": 255
+                    },
                     "title": {
                         "type": "string",
-                        "description": "Título del nodo. Puede ser la representación textual de un número.",
-                        "maxLength": 255
+                        "readOnly": true
                     },
                     "parent": {
                         "type": "integer",
@@ -898,29 +1783,17 @@
                     },
                     "children": {
                         "type": "string",
-                        "readOnly": true,
-                        "description": "Lista de nodos hijos (recursividad limitada por depth)."
+                        "readOnly": true
                     },
                     "created_at": {
                         "type": "string",
-                        "readOnly": true,
-                        "description": "Fecha de creación ajustada a la zona horaria del cliente."
-                    },
-                    "created_by_name": {
-                        "type": "string",
-                        "description": "Nombre del usuario que creó el nodo.",
-                        "readOnly": true
-                    },
-                    "updated_by_name": {
-                        "type": "string",
-                        "description": "Nombre del usuario que modificó por última vez el nodo.",
                         "readOnly": true
                     }
                 }
             },
             "PatchedUser": {
                 "type": "object",
-                "description": "Serializer base para operaciones generales de lectura/actualización de usuarios.\n\nCampos clave:\n- 'password': WRITE_ONLY, requerido solo en creación/actualización de contraseña.\n- Campos de auditoría de nodos ('nodes_created_count' en DetailSerializer)\n  se exponen como READ_ONLY.",
+                "description": "Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).\n\nCaracterísticas:\n- Permite actualizaciones parciales sin exigir 'email' o 'username' obligatoriamente.\n- La contraseña es 'write_only' (nunca se lee, solo se escribe).\n- Incluye validaciones de unicidad personalizadas para permitir editar el propio perfil.",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -989,7 +1862,7 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Contraseña. Se ignora en el listado, requerida en el POST/PUT."
+                        "description": "Dejar en blanco para mantener la contraseña actual."
                     }
                 }
             },
@@ -1048,7 +1921,7 @@
             },
             "User": {
                 "type": "object",
-                "description": "Serializer base para operaciones generales de lectura/actualización de usuarios.\n\nCampos clave:\n- 'password': WRITE_ONLY, requerido solo en creación/actualización de contraseña.\n- Campos de auditoría de nodos ('nodes_created_count' en DetailSerializer)\n  se exponen como READ_ONLY.",
+                "description": "Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).\n\nCaracterísticas:\n- Permite actualizaciones parciales sin exigir 'email' o 'username' obligatoriamente.\n- La contraseña es 'write_only' (nunca se lee, solo se escribe).\n- Incluye validaciones de unicidad personalizadas para permitir editar el propio perfil.",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -1117,22 +1990,20 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Contraseña. Se ignora en el listado, requerida en el POST/PUT."
+                        "description": "Dejar en blanco para mantener la contraseña actual."
                     }
                 },
                 "required": [
                     "date_joined",
-                    "email",
                     "id",
                     "is_staff",
                     "is_superuser",
-                    "last_login",
-                    "username"
+                    "last_login"
                 ]
             },
             "UserCreate": {
                 "type": "object",
-                "description": "Serializer específico para el registro de nuevos usuarios (POST /users/).\nAplica validaciones estrictas de contraseña y rol durante la creación.",
+                "description": "Serializer exclusivo para la creación de nuevos usuarios (POST).\nDifiere del base en que aquí los campos principales SÍ son obligatorios.",
                 "properties": {
                     "username": {
                         "type": "string",
@@ -1149,7 +2020,7 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Contraseña mínima de 8 caracteres.",
+                        "description": "Contraseña obligatoria (mínimo 8 caracteres).",
                         "minLength": 8
                     },
                     "password_confirm": {
@@ -1183,7 +2054,7 @@
             },
             "UserDetail": {
                 "type": "object",
-                "description": "Serializer específico para la vista de detalle de usuario.\nExpone métricas de auditoría de nodos creados.",
+                "description": "Serializer extendido para la vista de detalle (GET /users/{id}/).\nIncluye métricas adicionales de auditoría (conteo de nodos).",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -1252,23 +2123,21 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Contraseña. Se ignora en el listado, requerida en el POST/PUT."
+                        "description": "Dejar en blanco para mantener la contraseña actual."
                     },
                     "nodes_created_count": {
                         "type": "string",
                         "readOnly": true,
-                        "description": "Número total de nodos activos creados por este usuario."
+                        "description": "Cantidad de nodos activos creados por este usuario."
                     }
                 },
                 "required": [
                     "date_joined",
-                    "email",
                     "id",
                     "is_staff",
                     "is_superuser",
                     "last_login",
-                    "nodes_created_count",
-                    "username"
+                    "nodes_created_count"
                 ]
             }
         },

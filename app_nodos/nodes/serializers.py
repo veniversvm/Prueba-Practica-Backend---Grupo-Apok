@@ -3,7 +3,105 @@ from .models import Node
 from num2words import num2words
 import pytz
 from django.utils import timezone as django_timezone
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            'Ejemplo de nodo raíz',
+            value={
+                "id": 1,
+                "content": "Nodo raíz",
+                "title": "one",
+                "parent": None,
+                "created_at": "2024-01-15 10:00:00",
+                "children": [
+                    {
+                        "id": 2,
+                        "content": "Hijo",
+                        "title": "two",
+                        "parent": 1,
+                        "created_at": "2024-01-15 10:05:00",
+                        "children": []
+                    }
+                ]
+            },
+            description='Ejemplo de nodo raíz con un hijo (depth=None o depth=1)'
+        ),
+        OpenApiExample(
+            'Ejemplo de nodo con profundidad 2',
+            value={
+                "id": 1,
+                "content": "Nodo raíz",
+                "title": "uno",
+                "parent": None,
+                "created_at": "2024-01-15 10:00:00",
+                "children": [
+                    {
+                        "id": 2,
+                        "content": "Hijo",
+                        "title": "dos",
+                        "parent": 1,
+                        "created_at": "2024-01-15 10:05:00",
+                        "children": [
+                            {
+                                "id": 3,
+                                "content": "Nieto",
+                                "title": "tres",
+                                "parent": 2,
+                                "created_at": "2024-01-15 10:07:00",
+                                "children": []
+                            }
+                        ]
+                    }
+                ]
+            },
+            description='Ejemplo con depth=2 (hasta nietos)'
+        ),
+        OpenApiExample(
+            'Ejemplo de nodo hoja',
+            value={
+                "id": 4,
+                "content": "Nodo hoja",
+                "title": "four",
+                "parent": 2,
+                "created_at": "2024-01-15 10:08:00",
+                "children": []
+            },
+            description='Ejemplo de nodo sin hijos'
+        ),
+    ],
+    component_name='Node',
+    description='''
+Serializador para el modelo Node con características avanzadas:
+
+**Campos calculados dinámicamente:**
+1. **title**: Representación textual del ID según idioma del header Accept-Language
+   - Ejemplo: ID=1 → "one" (en), "uno" (es), "un" (fr)
+   - Idiomas soportados: en, es, fr, de, it, pt, ru, ar
+   - Fallback a inglés si idioma no soportado
+
+2. **children**: Lista de hijos con control de profundidad recursiva
+   - Controlado por parámetro de query ?depth=N
+   - Lógica de profundidad:
+     - depth=None: solo hijos directos (default)
+     - depth=0: sin hijos
+     - depth=1: hijos directos (sin nietos)
+     - depth=2: hijos + nietos
+     - depth=-1: todos los niveles (limitado a 10 por seguridad)
+
+3. **created_at**: Fecha de creación en zona horaria personalizada
+   - Se ajusta según header Time-Zone
+   - Formato: "YYYY-MM-DD HH:MM:SS"
+   - Fallback a UTC si zona horaria inválida
+
+**Validaciones implementadas:**
+- Unicidad: No puede haber dos nodos con mismo content bajo mismo parent
+- Auto-referencia: Un nodo no puede ser su propio padre
+- ID validation: IDs deben ser ≥ 1 (solo lectura, generado automáticamente)
+'''
+)
 class NodeSerializer(serializers.ModelSerializer):
     """
     Serializador para el modelo Node.
@@ -12,6 +110,7 @@ class NodeSerializer(serializers.ModelSerializer):
     - Control de profundidad recursiva
     - Si no se pasa profundidad, solo muestra hijos directos
     """
+    
     
     title = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()

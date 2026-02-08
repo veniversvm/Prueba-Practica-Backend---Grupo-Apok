@@ -2,6 +2,7 @@ from django.db import models
 from django.db.models import UniqueConstraint, Q
 from django.utils import timezone
 
+
 class Node(models.Model):
     """
     Modelo para representar un nodo en una estructura jerárquica de árbol.

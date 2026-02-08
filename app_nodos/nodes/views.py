@@ -16,6 +16,240 @@ from .serializers import NodeSerializer, serializers
 CACHE_TIMEOUT = 180
 CACHE_VERSION_KEY = "node_list_cache_version"
 
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+
+@extend_schema_view(
+    list=extend_schema(
+        summary="Listar nodos raíz",
+        description='''
+Obtiene todos los nodos raíz del árbol jerárquico.
+
+**Características:**
+- Parámetro `depth` controla la profundidad (default: solo hijos directos)
+- Header `Accept-Language` define el idioma para el campo `title`
+- Header `Time-Zone` ajusta la zona horaria de `created_at`
+- Cache automático de 180 segundos
+
+**Ejemplos de uso:**
+- `GET /api/nodes/` - Solo hijos directos (default)
+- `GET /api/nodes/?depth=2` - Hasta nietos
+- `GET /api/nodes/?depth=-1` - Profundidad infinita (limitada a 10 niveles)
+''',
+        parameters=[
+            OpenApiParameter(
+                name='depth',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='''
+Niveles de profundidad a mostrar:
+- `null` o no especificado: solo hijos directos (default)
+- `0`: sin hijos
+- `1`: hijos directos
+- `2`: hijos + nietos
+- `-1`: profundidad infinita (limitada a 10 niveles)
+''',
+                required=False,
+                examples=[
+                    OpenApiExample('Default (sin parámetro)', value=None),
+                    OpenApiExample('Profundidad 2 niveles', value=2),
+                    OpenApiExample('Profundidad infinita', value=-1),
+                ]
+            )
+        ],
+        responses={
+            200: NodeSerializer(many=True),
+            401: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='No autenticado'
+            ),
+        }
+    ),
+    retrieve=extend_schema(
+        summary="Obtener nodo específico",
+        description='Obtiene un nodo específico con sus descendientes según profundidad.',
+        parameters=[
+            OpenApiParameter(
+                name='depth',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Niveles de profundidad a mostrar',
+                required=False
+            ),
+            OpenApiParameter(
+                name='Accept-Language',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.HEADER,
+                description='Idioma para el campo title (ej: es, en, fr)',
+                required=False
+            ),
+            OpenApiParameter(
+                name='Time-Zone',
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.HEADER,
+                description='Zona horaria para created_at (ej: UTC, America/New_York)',
+                required=False
+            )
+        ],
+        responses={
+            200: NodeSerializer,
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='''
+Errores de validación:
+- ID debe ser ≥ 1
+- ID inválido (no numérico)
+'''
+            ),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Nodo no encontrado'
+            ),
+        }
+    ),
+    create=extend_schema(
+        summary="Crear nuevo nodo",
+        description='''
+Crea un nuevo nodo en el árbol.
+
+**Permisos requeridos:** Rol ADMIN o SUDO
+''',
+        request=NodeSerializer,
+        responses={
+            201: NodeSerializer,
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='''
+Errores de validación:
+- Content duplicado en mismo nivel
+- Auto-referencia
+'''
+            ),
+            403: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Permisos insuficientes'
+            ),
+        }
+    ),
+    update=extend_schema(
+        summary="Actualizar nodo completo",
+        description='Actualiza todos los campos de un nodo existente.',
+        request=NodeSerializer,
+        responses={
+            200: NodeSerializer,
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Error de validación'
+            ),
+            403: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Permisos insuficientes'
+            ),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Nodo no encontrado'
+            ),
+        }
+    ),
+    partial_update=extend_schema(
+        summary="Actualizar nodo parcialmente",
+        description='Actualiza campos específicos de un nodo existente.',
+        request=NodeSerializer,
+        responses={
+            200: NodeSerializer,
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Error de validación'
+            ),
+            403: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Permisos insuficientes'
+            ),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Nodo no encontrado'
+            ),
+        }
+    ),
+    destroy=extend_schema(
+        summary="Eliminar nodo (soft delete)",
+        description='''
+Elimina lógicamente un nodo.
+
+**Restricciones:**
+- No se puede eliminar nodos con hijos activos
+- Solo elimina nodos hoja
+- Es un borrado lógico (is_deleted=True)
+
+**Respuesta exitosa:** 200 OK con mensaje de confirmación
+**Error:** 400 Bad Request si tiene hijos activos
+''',
+        responses={
+            200: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Eliminación exitosa',
+                examples=[
+                    OpenApiExample(
+                        'Ejemplo respuesta',
+                        value={
+                            "message": "Nodo 5 eliminado exitosamente.",
+                            "id": 5
+                        }
+                    )
+                ]
+            ),
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='''
+Errores:
+- El nodo tiene hijos activos (code: has_children)
+- ID inválido (< 1 o no numérico)
+''',
+                examples=[
+                    OpenApiExample(
+                        'Error: tiene hijos',
+                        value={
+                            "error": "No se puede eliminar un nodo que tiene hijos activos.",
+                            "code": "has_children"
+                        }
+                    )
+                ]
+            ),
+            403: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Permisos insuficientes'
+            ),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Nodo no encontrado'
+            ),
+        }
+    ),
+    descendants=extend_schema(
+        summary="Obtener descendientes de un nodo",
+        description='Obtiene todos los descendientes de un nodo específico.',
+        parameters=[
+            OpenApiParameter(
+                name='depth',
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.QUERY,
+                description='Niveles de profundidad a mostrar',
+                required=False
+            )
+        ],
+        responses={
+            200: NodeSerializer,
+            400: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='ID inválido (< 1 o no numérico)'
+            ),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT,
+                description='Nodo no encontrado'
+            ),
+        }
+    )
+)
 class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
     """
     ViewSet para la gestión jerárquica de nodos.
@@ -297,6 +531,42 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
             return [IsAdminUserCustom()]
         return [IsActiveAndConfirmed()]
 
+@extend_schema(
+    summary="Obtener árbol completo",
+    description='''
+Obtiene árboles completos desde nodos raíz específicos o todos los árboles.
+
+**Parámetros opcionales:**
+- `root_id`: ID del nodo raíz específico
+- `depth`: Profundidad máxima a mostrar
+''',
+    parameters=[
+        OpenApiParameter(
+            name='root_id',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='ID del nodo raíz específico',
+            required=False
+        ),
+        OpenApiParameter(
+            name='depth',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='Niveles de profundidad a mostrar',
+            required=False
+        )
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description='Árbol o lista de árboles'
+        ),
+        404: OpenApiResponse(
+            response=OpenApiTypes.OBJECT,
+            description='Nodo raíz no encontrado'
+        ),
+    }
+)
 class NodeTreeView(APIView):
     """
     Vista especializada para obtener árboles completos.
