@@ -478,11 +478,11 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         cache.clear()  # O cache.delete_pattern('*nodes*') si usas redis
-        serializer.save()
+        serializer.save(created_by=self.request.user)
     
     def perform_update(self, serializer):
         cache.clear()
-        serializer.save()
+        serializer.save(created_by=self.request.user)
     
     def retrieve(self, request, *args, **kwargs):
         """

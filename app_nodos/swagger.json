@@ -1231,11 +1231,374 @@
         "/api/users/": {
             "get": {
                 "operationId": "users_list",
-                "description": "ViewSet para la gestión completa de usuarios.\n\nImplementa control de acceso basado en roles (SUDO, ADMIN, USER) para CRUD,\nvalidaciones estrictas de creación/actualización de roles,\ny endpoints custom para auditoría de nodos y gestión de perfil.",
+                "description": "\n        Obtiene la lista de usuarios según los permisos del usuario autenticado.\n        \n        **Reglas de visibilidad por rol:**\n        - **SUDO**: Ve todos los usuarios (excepto eliminados)\n        - **ADMIN**: Ve todos los usuarios excepto SUDO\n        - **USER**: Solo ve su propio perfil\n        \n        **Características:**\n        - Filtros dinámicos por rol, estado de confirmación y actividad\n        - Búsqueda en username, email, nombre y apellido\n        - Ordenamiento múltiple por diferentes campos\n        - Excluye automáticamente usuarios eliminados (soft delete)\n        \n        **Ejemplos de uso:**\n        - `GET /api/users/` - Lista según permisos\n        - `GET /api/users/?role=ADMIN` - Solo administradores\n        - `GET /api/users/?search=johndoe` - Buscar usuario\n        - `GET /api/users/?ordering=-date_joined` - Ordenar por fecha descendente\n        ",
+                "summary": "Listar usuarios",
                 "parameters": [
                     {
                         "in": "query",
                         "name": "is_active",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Filtrar por estado activo/inactivo (true/false)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "is_deleted",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Filtrar por estado de eliminación lógica (true/false)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "is_email_confirmed",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Filtrar por estado de confirmación de email (true/false)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "\n                Campo(s) para ordenar resultados. Múltiples campos separados por coma.\n                Campos disponibles: username, email, date_joined, role, is_active\n                Prefijo '-' para orden descendente.\n                Ejemplo: `ordering=-date_joined,username`\n                "
+                    },
+                    {
+                        "in": "query",
+                        "name": "role",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "ADMIN",
+                                "SUDO",
+                                "USER"
+                            ]
+                        },
+                        "description": "Filtrar por rol del usuario"
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Buscar texto en: username, email, first_name, last_name, role"
+                    }
+                ],
+                "tags": [
+                    "users"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/User"
+                                    }
+                                },
+                                "examples": {
+                                    "ListadoParaSUDO": {
+                                        "value": [
+                                            [
+                                                {
+                                                    "id": 1,
+                                                    "username": "superadmin",
+                                                    "email": "admin@system.com",
+                                                    "role": "SUDO",
+                                                    "is_email_confirmed": true,
+                                                    "is_active": true,
+                                                    "is_deleted": false,
+                                                    "date_joined": "2024-01-01T12:00:00Z"
+                                                },
+                                                {
+                                                    "id": 2,
+                                                    "username": "siteadmin",
+                                                    "email": "admin@site.com",
+                                                    "role": "ADMIN",
+                                                    "is_email_confirmed": true,
+                                                    "is_active": true,
+                                                    "is_deleted": false,
+                                                    "date_joined": "2024-01-02T10:00:00Z"
+                                                }
+                                            ]
+                                        ],
+                                        "summary": "Listado para SUDO",
+                                        "description": "SUDO ve todos los usuarios incluyendo otros SUDO"
+                                    },
+                                    "ListadoParaADMIN": {
+                                        "value": [
+                                            [
+                                                {
+                                                    "id": 2,
+                                                    "username": "siteadmin",
+                                                    "email": "admin@site.com",
+                                                    "role": "ADMIN",
+                                                    "is_email_confirmed": true,
+                                                    "is_active": true,
+                                                    "is_deleted": false,
+                                                    "date_joined": "2024-01-02T10:00:00Z"
+                                                },
+                                                {
+                                                    "id": 3,
+                                                    "username": "johndoe",
+                                                    "email": "john.doe@example.com",
+                                                    "role": "USER",
+                                                    "is_email_confirmed": true,
+                                                    "is_active": true,
+                                                    "is_deleted": false,
+                                                    "date_joined": "2024-01-03T08:00:00Z"
+                                                }
+                                            ]
+                                        ],
+                                        "summary": "Listado para ADMIN",
+                                        "description": "ADMIN ve todos los usuarios excepto SUDO"
+                                    },
+                                    "ListadoParaUSER": {
+                                        "value": [
+                                            [
+                                                {
+                                                    "id": 3,
+                                                    "username": "johndoe",
+                                                    "email": "john.doe@example.com",
+                                                    "role": "USER",
+                                                    "is_email_confirmed": true,
+                                                    "is_active": true,
+                                                    "is_deleted": false,
+                                                    "date_joined": "2024-01-03T08:00:00Z"
+                                                }
+                                            ]
+                                        ],
+                                        "summary": "Listado para USER",
+                                        "description": "USER solo ve su propio perfil"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No autenticado"
+                    },
+                    "403": {
+                        "description": "Permisos insuficientes"
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/": {
+            "get": {
+                "operationId": "users_retrieve",
+                "description": "\n        Obtiene el detalle completo de un usuario específico.\n        \n        **Incluye métricas extendidas:**\n        - `nodes_created_count`: Número de nodos activos creados por el usuario\n        - `role_display`: Nombre completo del rol (para mostrar en UI)\n        \n        **Validaciones de acceso:**\n        - SUDO: Puede ver cualquier usuario\n        - ADMIN: Puede ver cualquier usuario excepto SUDO\n        - USER: Solo puede verse a sí mismo\n        \n        **Usuarios eliminados:** No son accesibles a través de este endpoint\n        ",
+                "summary": "Obtener detalle de usuario",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this user.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "users"
+                ],
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UserDetail"
+                                },
+                                "examples": {
+                                    "DetalleDeUsuarioADMIN": {
+                                        "value": {
+                                            "id": 2,
+                                            "username": "siteadmin",
+                                            "email": "admin@site.com",
+                                            "first_name": "Site",
+                                            "last_name": "Manager",
+                                            "role": "ADMIN",
+                                            "role_display": "Administrador",
+                                            "is_email_confirmed": true,
+                                            "is_active": true,
+                                            "is_deleted": false,
+                                            "date_joined": "2024-01-02T10:00:00Z",
+                                            "last_login": "2024-01-14T14:20:00Z",
+                                            "nodes_created_count": 5
+                                        },
+                                        "summary": "Detalle de usuario ADMIN"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "description": "No autenticado"
+                    },
+                    "403": {
+                        "description": "Permisos insuficientes"
+                    },
+                    "404": {
+                        "description": "Usuario no encontrado o eliminado"
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "users_partial_update",
+                "description": "\n        Actualiza campos específicos de un usuario sin requerir todos los campos.\n        \n        **Mismas reglas y restricciones que PUT**, pero permite actualización parcial.\n        \n        **Ventajas:**\n        - Solo enviar campos a modificar\n        - Menor carga de datos\n        - Ideal para actualizaciones específicas\n        \n        **Ejemplos comunes:**\n        - Actualizar first_name/last_name\n        - Cambiar email (con validación de unicidad)\n        - Actualizar contraseña\n        - Activar/desactivar cuenta (con restricciones)\n        ",
+                "summary": "Actualizar parcialmente usuario (PATCH)",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "A unique integer value identifying this user.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "users"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUser"
+                            },
+                            "examples": {
+                                "ActualizarNombre": {
+                                    "value": {
+                                        "first_name": "Updated",
+                                        "last_name": "Name"
+                                    },
+                                    "summary": "Actualizar nombre",
+                                    "description": "Actualización parcial de nombre"
+                                },
+                                "CambiarEmail": {
+                                    "value": {
+                                        "email": "new.email@example.com"
+                                    },
+                                    "summary": "Cambiar email",
+                                    "description": "Cambio de email (debe ser único)"
+                                },
+                                "CambiarContraseña": {
+                                    "value": {
+                                        "password": "NewSecurePass789!"
+                                    },
+                                    "summary": "Cambiar contraseña",
+                                    "description": "Actualización de contraseña (se hashea automáticamente)"
+                                }
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUser"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedUser"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "jwtAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                },
+                                "examples": {
+                                    "ActualizarNombre": {
+                                        "value": {
+                                            "first_name": "Updated",
+                                            "last_name": "Name"
+                                        },
+                                        "summary": "Actualizar nombre",
+                                        "description": "Actualización parcial de nombre"
+                                    },
+                                    "CambiarEmail": {
+                                        "value": {
+                                            "email": "new.email@example.com"
+                                        },
+                                        "summary": "Cambiar email",
+                                        "description": "Cambio de email (debe ser único)"
+                                    },
+                                    "CambiarContraseña": {
+                                        "value": {
+                                            "password": "NewSecurePass789!"
+                                        },
+                                        "summary": "Cambiar contraseña",
+                                        "description": "Actualización de contraseña (se hashea automáticamente)"
+                                    }
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "description": "Usuario eliminado o datos inválidos"
+                    },
+                    "403": {
+                        "description": "Permisos insuficientes"
+                    },
+                    "404": {
+                        "description": "Usuario no encontrado"
+                    }
+                }
+            }
+        },
+        "/api/users/{id}/nodes-created/": {
+            "get": {
+                "operationId": "users_nodes_created_list",
+                "description": "\n        Obtiene la lista de nodos activos creados por un usuario específico.\n        \n        **Propósito:** Auditoría y seguimiento de actividad del usuario.\n        \n        **Permisos de acceso:**\n        - SUDO: Puede ver nodos de cualquier usuario\n        - ADMIN: Puede ver nodos de cualquier usuario (excepto SUDO)\n        - USER: Solo puede ver sus propios nodos\n        \n        **Características:**\n        - Solo incluye nodos activos (is_deleted=False)\n        - Incluye relaciones anidadas (parent, created_by, updated_by)\n        - Paginación automática\n        - Optimizado con select_related para mejor rendimiento\n        \n        **Requisito:** La aplicación 'nodes' debe estar instalada y disponible.\n        ",
+                "summary": "Listar nodos creados por usuario",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "ID del usuario cuyos nodos se quieren listar",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "is_active",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "is_deleted",
                         "schema": {
                             "type": "boolean"
                         }
@@ -1294,75 +1657,54 @@
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/User"
+                                        "$ref": "#/components/schemas/Node"
+                                    }
+                                },
+                                "examples": {
+                                    "RespuestaExitosa": {
+                                        "value": [
+                                            [
+                                                {
+                                                    "id": 1,
+                                                    "title": "Nodo Principal",
+                                                    "description": "Descripción del nodo",
+                                                    "created_by": {
+                                                        "id": 2,
+                                                        "username": "siteadmin",
+                                                        "email": "admin@site.com"
+                                                    },
+                                                    "created_at": "2024-01-10T09:30:00Z",
+                                                    "is_deleted": false
+                                                }
+                                            ]
+                                        ],
+                                        "summary": "Respuesta exitosa"
                                     }
                                 }
                             }
                         },
                         "description": ""
-                    }
-                }
-            },
-            "post": {
-                "operationId": "users_create",
-                "description": "Crea un nuevo usuario, validando que solo SUDO pueda crear un SUDO.",
-                "tags": [
-                    "users"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/UserCreate"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/UserCreate"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/UserCreate"
-                            }
-                        }
                     },
-                    "required": true
-                },
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/UserCreate"
-                                }
-                            }
-                        },
-                        "description": ""
+                    "400": {
+                        "description": "Usuario eliminado o datos inválidos"
+                    },
+                    "403": {
+                        "description": "Permisos insuficientes"
+                    },
+                    "404": {
+                        "description": "Usuario no encontrado"
+                    },
+                    "503": {
+                        "description": "Aplicación de nodos no disponible"
                     }
                 }
             }
         },
-        "/api/users/{id}/": {
+        "/api/users/me/": {
             "get": {
-                "operationId": "users_retrieve",
-                "description": "ViewSet para la gestión completa de usuarios.\n\nImplementa control de acceso basado en roles (SUDO, ADMIN, USER) para CRUD,\nvalidaciones estrictas de creación/actualización de roles,\ny endpoints custom para auditoría de nodos y gestión de perfil.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "A unique integer value identifying this user.",
-                        "required": true
-                    }
-                ],
+                "operationId": "users_me_retrieve",
+                "description": "\n        Retorna el perfil completo del usuario actualmente autenticado.\n        \n        **Propósito:** Auto-gestión y acceso rápido a información personal.\n        \n        **Características:**\n        - Incluye todos los datos del usuario\n        - Métricas extendidas: nodes_created_count (si aplica)\n        - Información de rol en formato legible (role_display)\n        - Validación de estado del usuario (no eliminado)\n        \n        **Respuestas especiales:**\n        - 410 GONE: Si el usuario ha sido eliminado (soft delete)\n        - 401 UNAUTHORIZED: Si no hay usuario autenticado\n        \n        **Ejemplo de uso:** Dashboard personal, configuración de perfil\n        ",
+                "summary": "Obtener perfil del usuario autenticado",
                 "tags": [
                     "users"
                 ],
@@ -1377,209 +1719,36 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/UserDetail"
+                                },
+                                "examples": {
+                                    "PerfilDeUsuarioRegular": {
+                                        "value": {
+                                            "id": 3,
+                                            "username": "johndoe",
+                                            "email": "john.doe@example.com",
+                                            "first_name": "John",
+                                            "last_name": "Doe",
+                                            "role": "USER",
+                                            "role_display": "Usuario Regular",
+                                            "is_email_confirmed": true,
+                                            "is_active": true,
+                                            "is_deleted": false,
+                                            "date_joined": "2024-01-03T08:00:00Z",
+                                            "last_login": "2024-01-13T16:45:00Z",
+                                            "nodes_created_count": 12
+                                        },
+                                        "summary": "Perfil de usuario regular"
+                                    }
                                 }
                             }
                         },
                         "description": ""
-                    }
-                }
-            },
-            "put": {
-                "operationId": "users_update",
-                "description": "Valida que los usuarios no puedan escalar privilegios o ser editados por usuarios inferiores.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "A unique integer value identifying this user.",
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "users"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/User"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/User"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/User"
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/User"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "patch": {
-                "operationId": "users_partial_update",
-                "description": "ViewSet para la gestión completa de usuarios.\n\nImplementa control de acceso basado en roles (SUDO, ADMIN, USER) para CRUD,\nvalidaciones estrictas de creación/actualización de roles,\ny endpoints custom para auditoría de nodos y gestión de perfil.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "A unique integer value identifying this user.",
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "users"
-                ],
-                "requestBody": {
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PatchedUser"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PatchedUser"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/PatchedUser"
-                            }
-                        }
-                    }
-                },
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/User"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            },
-            "delete": {
-                "operationId": "users_destroy",
-                "description": "Implementación de Borrado Lógico (Soft Delete) y validación de permisos.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "A unique integer value identifying this user.",
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "users"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No response body"
-                    }
-                }
-            }
-        },
-        "/api/users/{id}/nodes-created/": {
-            "get": {
-                "operationId": "users_nodes_created_retrieve",
-                "description": "Endpoint custom para listar los nodos CREADOS por un usuario específico.\nPermite a ADMIN/SUDO ver todos; USER solo puede ver los suyos.",
-                "parameters": [
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "integer"
-                        },
-                        "description": "A unique integer value identifying this user.",
-                        "required": true
-                    }
-                ],
-                "tags": [
-                    "users"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/User"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/users/me/": {
-            "get": {
-                "operationId": "users_me_retrieve",
-                "description": "Endpoint para recuperar el perfil del usuario autenticado (GET /me).",
-                "tags": [
-                    "users"
-                ],
-                "security": [
-                    {
-                        "jwtAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/User"
-                                }
-                            }
-                        },
-                        "description": ""
+                    },
+                    "401": {
+                        "description": "No autenticado"
+                    },
+                    "410": {
+                        "description": "Cuenta eliminada (soft delete)"
                     }
                 }
             }
@@ -1587,7 +1756,8 @@
         "/api/users/me/change-password/": {
             "post": {
                 "operationId": "users_me_change_password_create",
-                "description": "Endpoint para que el usuario actual cambie su propia contraseña.",
+                "description": "\n        Permite al usuario cambiar su propia contraseña de forma segura.\n        \n        **Proceso de validación:**\n        1. Verificar contraseña actual (old_password)\n        2. Validar que nueva contraseña coincida con confirmación\n        3. Verificar fortaleza de nueva contraseña (mínimo 8 caracteres)\n        4. Actualizar contraseña en base de datos (hash automático)\n        \n        **Requisitos de contraseña:**\n        - Mínimo 8 caracteres\n        - Se recomienda usar mayúsculas, minúsculas, números y símbolos\n        - No se almacena en texto plano (siempre hasheada)\n        \n        **Consideraciones de seguridad:**\n        - Usuario debe estar autenticado\n        - Usuario no debe estar eliminado\n        - Después del cambio, tokens JWT existentes siguen válidos hasta expiración\n        - Para invalidar todas las sesiones, se requiere logout manual\n        \n        **Respuestas de error específicas:**\n        - 400: Contraseña actual incorrecta o no coinciden\n        - 401: No autenticado\n        - 410: Cuenta eliminada\n        ",
+                "summary": "Cambiar contraseña propia",
                 "tags": [
                     "users"
                 ],
@@ -1595,17 +1765,37 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/User"
-                            }
-                        },
-                        "application/x-www-form-urlencoded": {
-                            "schema": {
-                                "$ref": "#/components/schemas/User"
-                            }
-                        },
-                        "multipart/form-data": {
-                            "schema": {
-                                "$ref": "#/components/schemas/User"
+                                "type": "object",
+                                "required": [
+                                    "old_password",
+                                    "new_password",
+                                    "confirm_password"
+                                ],
+                                "properties": {
+                                    "old_password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "description": "Contraseña actual del usuario",
+                                        "minLength": 1
+                                    },
+                                    "new_password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "description": "Nueva contraseña (mínimo 8 caracteres)",
+                                        "minLength": 8
+                                    },
+                                    "confirm_password": {
+                                        "type": "string",
+                                        "format": "password",
+                                        "description": "Confirmación de nueva contraseña",
+                                        "minLength": 8
+                                    }
+                                },
+                                "example": {
+                                    "old_password": "CurrentPass123",
+                                    "new_password": "NewSecurePass456!",
+                                    "confirm_password": "NewSecurePass456!"
+                                }
                             }
                         }
                     }
@@ -1617,14 +1807,16 @@
                 ],
                 "responses": {
                     "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/User"
-                                }
-                            }
-                        },
-                        "description": ""
+                        "description": "Contraseña actualizada correctamente"
+                    },
+                    "400": {
+                        "description": "Error de validación"
+                    },
+                    "401": {
+                        "description": "No autenticado"
+                    },
+                    "410": {
+                        "description": "Cuenta eliminada"
                     }
                 }
             }
@@ -1632,7 +1824,8 @@
         "/api/users/me/update/": {
             "put": {
                 "operationId": "users_me_update_update",
-                "description": "Endpoint para actualizar el perfil del usuario autenticado.",
+                "description": "\n        Permite al usuario autenticado actualizar su propio perfil.\n        \n        **Características:**\n        - Métodos PUT (actualización completa) y PATCH (parcial)\n        - Mismas validaciones que actualización normal\n        - Restricciones adicionales para auto-gestión\n        \n        **Restricciones específicas:**\n        1. USER no puede cambiar su propio rol\n        2. No se puede desactivar la propia cuenta\n        3. Validación de email único (excluyéndose a sí mismo)\n        4. Usuario no debe estar eliminado\n        \n        **Campos comúnmente actualizados:**\n        - first_name, last_name\n        - email (con validación de unicidad)\n        - password (si se proporciona, se hashea automáticamente)\n        \n        **No se puede modificar:**\n        - username (requeriría flujo especial)\n        - role (excepto por ADMIN/SUDO)\n        - is_active (para desactivar cuenta propia)\n        - is_deleted (solo mediante soft delete)\n        ",
+                "summary": "Actualizar perfil propio",
                 "tags": [
                     "users"
                 ],
@@ -1641,6 +1834,27 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/User"
+                            },
+                            "examples": {
+                                "ActualizaciónParcial(PATCH)": {
+                                    "value": {
+                                        "first_name": "Jonathan",
+                                        "last_name": "Smith",
+                                        "email": "jonathan.smith@example.com"
+                                    },
+                                    "summary": "Actualización parcial (PATCH)",
+                                    "description": "Cambio de nombre y email"
+                                },
+                                "ActualizaciónCompleta(PUT)": {
+                                    "value": {
+                                        "first_name": "Jonathan",
+                                        "last_name": "Smith",
+                                        "email": "jonathan.smith@example.com",
+                                        "password": "NewSecurePass123!"
+                                    },
+                                    "summary": "Actualización completa (PUT)",
+                                    "description": "Cambio completo incluyendo contraseña"
+                                }
                             }
                         },
                         "application/x-www-form-urlencoded": {
@@ -1666,16 +1880,50 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/User"
+                                },
+                                "examples": {
+                                    "ActualizaciónParcial(PATCH)": {
+                                        "value": {
+                                            "first_name": "Jonathan",
+                                            "last_name": "Smith",
+                                            "email": "jonathan.smith@example.com"
+                                        },
+                                        "summary": "Actualización parcial (PATCH)",
+                                        "description": "Cambio de nombre y email"
+                                    },
+                                    "ActualizaciónCompleta(PUT)": {
+                                        "value": {
+                                            "first_name": "Jonathan",
+                                            "last_name": "Smith",
+                                            "email": "jonathan.smith@example.com",
+                                            "password": "NewSecurePass123!"
+                                        },
+                                        "summary": "Actualización completa (PUT)",
+                                        "description": "Cambio completo incluyendo contraseña"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "description": "Datos inválidos"
+                    },
+                    "401": {
+                        "description": "No autenticado"
+                    },
+                    "403": {
+                        "description": "Restricción de auto-gestión"
+                    },
+                    "410": {
+                        "description": "Cuenta eliminada"
                     }
                 }
             },
             "patch": {
                 "operationId": "users_me_update_partial_update",
-                "description": "Endpoint para actualizar el perfil del usuario autenticado.",
+                "description": "\n        Permite al usuario autenticado actualizar su propio perfil.\n        \n        **Características:**\n        - Métodos PUT (actualización completa) y PATCH (parcial)\n        - Mismas validaciones que actualización normal\n        - Restricciones adicionales para auto-gestión\n        \n        **Restricciones específicas:**\n        1. USER no puede cambiar su propio rol\n        2. No se puede desactivar la propia cuenta\n        3. Validación de email único (excluyéndose a sí mismo)\n        4. Usuario no debe estar eliminado\n        \n        **Campos comúnmente actualizados:**\n        - first_name, last_name\n        - email (con validación de unicidad)\n        - password (si se proporciona, se hashea automáticamente)\n        \n        **No se puede modificar:**\n        - username (requeriría flujo especial)\n        - role (excepto por ADMIN/SUDO)\n        - is_active (para desactivar cuenta propia)\n        - is_deleted (solo mediante soft delete)\n        ",
+                "summary": "Actualizar perfil propio",
                 "tags": [
                     "users"
                 ],
@@ -1684,6 +1932,27 @@
                         "application/json": {
                             "schema": {
                                 "$ref": "#/components/schemas/PatchedUser"
+                            },
+                            "examples": {
+                                "ActualizaciónParcial(PATCH)": {
+                                    "value": {
+                                        "first_name": "Jonathan",
+                                        "last_name": "Smith",
+                                        "email": "jonathan.smith@example.com"
+                                    },
+                                    "summary": "Actualización parcial (PATCH)",
+                                    "description": "Cambio de nombre y email"
+                                },
+                                "ActualizaciónCompleta(PUT)": {
+                                    "value": {
+                                        "first_name": "Jonathan",
+                                        "last_name": "Smith",
+                                        "email": "jonathan.smith@example.com",
+                                        "password": "NewSecurePass123!"
+                                    },
+                                    "summary": "Actualización completa (PUT)",
+                                    "description": "Cambio completo incluyendo contraseña"
+                                }
                             }
                         },
                         "application/x-www-form-urlencoded": {
@@ -1709,10 +1978,43 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/User"
+                                },
+                                "examples": {
+                                    "ActualizaciónParcial(PATCH)": {
+                                        "value": {
+                                            "first_name": "Jonathan",
+                                            "last_name": "Smith",
+                                            "email": "jonathan.smith@example.com"
+                                        },
+                                        "summary": "Actualización parcial (PATCH)",
+                                        "description": "Cambio de nombre y email"
+                                    },
+                                    "ActualizaciónCompleta(PUT)": {
+                                        "value": {
+                                            "first_name": "Jonathan",
+                                            "last_name": "Smith",
+                                            "email": "jonathan.smith@example.com",
+                                            "password": "NewSecurePass123!"
+                                        },
+                                        "summary": "Actualización completa (PUT)",
+                                        "description": "Cambio completo incluyendo contraseña"
+                                    }
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "description": "Datos inválidos"
+                    },
+                    "401": {
+                        "description": "No autenticado"
+                    },
+                    "403": {
+                        "description": "Restricción de auto-gestión"
+                    },
+                    "410": {
+                        "description": "Cuenta eliminada"
                     }
                 }
             }
@@ -1793,7 +2095,7 @@
             },
             "PatchedUser": {
                 "type": "object",
-                "description": "Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).\n\nCaracterísticas:\n- Permite actualizaciones parciales sin exigir 'email' o 'username' obligatoriamente.\n- La contraseña es 'write_only' (nunca se lee, solo se escribe).\n- Incluye validaciones de unicidad personalizadas para permitir editar el propio perfil.",
+                "description": "Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -1862,7 +2164,13 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Dejar en blanco para mantener la contraseña actual."
+                        "description": "Dejar en blanco para mantener la contraseña actual. Mínimo 8 caracteres.",
+                        "minLength": 8
+                    },
+                    "is_deleted": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Indica si el usuario ha sido eliminado lógicamente."
                     }
                 }
             },
@@ -1921,7 +2229,7 @@
             },
             "User": {
                 "type": "object",
-                "description": "Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).\n\nCaracterísticas:\n- Permite actualizaciones parciales sin exigir 'email' o 'username' obligatoriamente.\n- La contraseña es 'write_only' (nunca se lee, solo se escribe).\n- Incluye validaciones de unicidad personalizadas para permitir editar el propio perfil.",
+                "description": "Serializer base para operaciones de lectura (GET) y actualización (PUT/PATCH).",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -1990,71 +2298,27 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Dejar en blanco para mantener la contraseña actual."
+                        "description": "Dejar en blanco para mantener la contraseña actual. Mínimo 8 caracteres.",
+                        "minLength": 8
+                    },
+                    "is_deleted": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Indica si el usuario ha sido eliminado lógicamente."
                     }
                 },
                 "required": [
                     "date_joined",
                     "id",
+                    "is_deleted",
                     "is_staff",
                     "is_superuser",
                     "last_login"
                 ]
             },
-            "UserCreate": {
-                "type": "object",
-                "description": "Serializer exclusivo para la creación de nuevos usuarios (POST).\nDifiere del base en que aquí los campos principales SÍ son obligatorios.",
-                "properties": {
-                    "username": {
-                        "type": "string",
-                        "description": "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.",
-                        "pattern": "^[\\w.@+-]+$",
-                        "maxLength": 150
-                    },
-                    "email": {
-                        "type": "string",
-                        "format": "email",
-                        "description": "Correo electrónico único del usuario.",
-                        "maxLength": 254
-                    },
-                    "password": {
-                        "type": "string",
-                        "writeOnly": true,
-                        "description": "Contraseña obligatoria (mínimo 8 caracteres).",
-                        "minLength": 8
-                    },
-                    "password_confirm": {
-                        "type": "string",
-                        "writeOnly": true,
-                        "description": "Confirmación de la contraseña."
-                    },
-                    "role": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/RoleEnum"
-                            }
-                        ],
-                        "description": "Rol de acceso del usuario (SUDO, ADMIN, USER).\n\n* `SUDO` - Super User Ops\n* `ADMIN` - Administrador\n* `USER` - Usuario Regular"
-                    },
-                    "first_name": {
-                        "type": "string",
-                        "maxLength": 150
-                    },
-                    "last_name": {
-                        "type": "string",
-                        "maxLength": 150
-                    }
-                },
-                "required": [
-                    "email",
-                    "password",
-                    "password_confirm",
-                    "username"
-                ]
-            },
             "UserDetail": {
                 "type": "object",
-                "description": "Serializer extendido para la vista de detalle (GET /users/{id}/).\nIncluye métricas adicionales de auditoría (conteo de nodos).",
+                "description": "Serializer extendido para la vista de detalle.",
                 "properties": {
                     "id": {
                         "type": "integer",
@@ -2123,21 +2387,34 @@
                     "password": {
                         "type": "string",
                         "writeOnly": true,
-                        "description": "Dejar en blanco para mantener la contraseña actual."
+                        "description": "Dejar en blanco para mantener la contraseña actual. Mínimo 8 caracteres.",
+                        "minLength": 8
+                    },
+                    "is_deleted": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Indica si el usuario ha sido eliminado lógicamente."
                     },
                     "nodes_created_count": {
                         "type": "string",
                         "readOnly": true,
                         "description": "Cantidad de nodos activos creados por este usuario."
+                    },
+                    "role_display": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Nombre completo del rol."
                     }
                 },
                 "required": [
                     "date_joined",
                     "id",
+                    "is_deleted",
                     "is_staff",
                     "is_superuser",
                     "last_login",
-                    "nodes_created_count"
+                    "nodes_created_count",
+                    "role_display"
                 ]
             }
         },

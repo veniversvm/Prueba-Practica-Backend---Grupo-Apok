@@ -116,11 +116,15 @@ class NodeSerializer(serializers.ModelSerializer):
     title = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
     created_at = serializers.SerializerMethodField()
+    created_by = serializers.PrimaryKeyRelatedField(
+        read_only=True,
+        default=serializers.CurrentUserDefault()
+    )
     
     class Meta:
         model = Node
-        fields = ['id', 'content', 'title', 'parent', 'children', 'created_at']
-        read_only_fields = ['id', 'title', 'created_at']
+        fields = ['id', 'content', 'title', 'parent', 'children', 'created_at', 'created_by', 'is_deleted']
+        read_only_fields = ['id', 'title', 'created_at', 'created_by']
     
     def get_title(self, obj):
         """Genera título en el idioma solicitado."""

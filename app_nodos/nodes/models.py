@@ -2,6 +2,7 @@
 from django.db import models
 from django.db.models import UniqueConstraint, Q
 from django.utils import timezone
+from django.conf import settings
 
 
 class Node(models.Model):
@@ -21,6 +22,15 @@ class Node(models.Model):
     content = models.CharField(
         max_length=255,
         help_text="Contenido o descripción del nodo."
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,  # 'users.User'
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='nodes_created',
+        help_text="Usuario que creó este nodo"
     )
     
     # NOTA: Eliminamos el campo 'title' del modelo

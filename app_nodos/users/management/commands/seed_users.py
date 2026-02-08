@@ -1,4 +1,4 @@
-import random
+# app_nodos/users/management/commands/seed_users.py
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.contrib.auth import get_user_model

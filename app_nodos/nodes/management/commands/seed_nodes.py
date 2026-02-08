@@ -5,7 +5,7 @@ from django.db import transaction
 from django.contrib.auth import get_user_model
 from nodes.models import Node
 from num2words import num2words
-import uuid  # Para generar identificadores únicos
+import uuid
 
 User = get_user_model()
 
@@ -17,18 +17,13 @@ class Command(BaseCommand):
             self.style.WARNING('Iniciando el sembrado de datos para el nuevo modelo...')
         )
 
-        # Obtener usuarios administradores
-        admins = list(User.objects.filter(role__in=['ADMIN', 'SUDO']))
-        
-        if not admins:
-            self.stdout.write(self.style.WARNING(
-                'No hay usuarios ADMIN o SUDO. Usando usuarios regulares...'
-            ))
-            admins = list(User.objects.all()[:3])
-            
-        if not admins:
+        # Obtener el usuario SUDO (ID 1)
+        try:
+            sudo_user = User.objects.get(id=1)
+            self.stdout.write(f'✅ Usando SUDO user: {sudo_user.username} (ID: {sudo_user.id})')
+        except User.DoesNotExist:
             self.stdout.write(self.style.ERROR(
-                'No hay usuarios en el sistema. Ejecuta seed_users primero.'
+                '❌ No existe el usuario con ID 1. Crea un usuario SUDO primero.'
             ))
             return
 
@@ -37,7 +32,7 @@ class Command(BaseCommand):
             self.stdout.write('Limpiando base de datos de nodos...')
             Node.objects.all().delete()
 
-            # Contenidos disponibles (evitar duplicados con sufijos únicos)
+            # Contenidos disponibles
             root_contents = [
                 "Empresa Principal",
                 "Departamento de Tecnología", 
@@ -86,10 +81,11 @@ class Command(BaseCommand):
 
             # 1. Crear Nodos Raíz (Nivel 0)
             roots = []
-            for i, content in enumerate(root_contents[:7]):  # Tomar solo 7 raíces
+            for i, content in enumerate(root_contents[:7]):
                 node = Node.objects.create(
                     content=f"{content} #{i+1}",
                     parent=None,
+                    created_by=sudo_user  # ← ASIGNAR SUDO USER
                 )
                 roots.append(node)
                 
@@ -103,13 +99,14 @@ class Command(BaseCommand):
             # 2. Crear Hijos (Nivel 1)
             child_nodes = []
             for root_idx, root in enumerate(roots):
-                for i in range(1, random.randint(2, 4)):  # 1-3 hijos por raíz
+                for i in range(1, random.randint(2, 4)):
                     child_type = random.choice(child_contents)
                     child_content = f"{child_type} {chr(64+i)} de {root.content}"
                     
                     child = Node.objects.create(
                         content=child_content,
                         parent=root,
+                        created_by=sudo_user  # ← ASIGNAR SUDO USER
                     )
                     child_nodes.append(child)
                     
@@ -117,22 +114,22 @@ class Command(BaseCommand):
 
                     # 3. Crear Nietos (Nivel 2) - 60% de probabilidad
                     if random.random() < 0.6:
-                        for j in range(1, random.randint(2, 4)):  # 1-3 nietos
+                        for j in range(1, random.randint(2, 4)):
                             task_type = random.choice(task_contents)
-                            # Asegurar unicidad con ID único
                             unique_id = str(uuid.uuid4())[:8]
                             grandchild_content = f"{task_type} {j}.{i} - {unique_id}"
                             
                             grandchild = Node.objects.create(
                                 content=grandchild_content,
                                 parent=child,
+                                created_by=sudo_user  # ← ASIGNAR SUDO USER
                             )
                             
                             self.stdout.write(f'  │   └─ Nieto creado: ID={grandchild.id}, Content="{grandchild_content}"')
 
                             # 4. Crear Bisnietos (Nivel 3) - 30% de probabilidad
                             if random.random() < 0.3:
-                                for k in range(1, random.randint(2, 3)):  # 1-2 bisnietos
+                                for k in range(1, random.randint(2, 3)):
                                     detail_type = random.choice(detail_contents)
                                     detail_unique_id = str(uuid.uuid4())[:6]
                                     great_grandchild_content = f"{detail_type} {k}.{j}.{i} - {detail_unique_id}"
@@ -140,6 +137,7 @@ class Command(BaseCommand):
                                     Node.objects.create(
                                         content=great_grandchild_content,
                                         parent=grandchild,
+                                        created_by=sudo_user  # ← ASIGNAR SUDO USER
                                     )
                                     self.stdout.write(f'  │       └─ Bisnieto creado: Content="{great_grandchild_content}"')
 
@@ -152,16 +150,18 @@ class Command(BaseCommand):
                 Node.objects.create(
                     content=leaf_content,
                     parent=random.choice(roots) if random.choice([True, False]) else None,
+                    created_by=sudo_user  # ← ASIGNAR SUDO USER
                 )
                 self.stdout.write(f'Nodo hoja creado: "{leaf_content}"')
 
-            # 6. Crear algunos nodos con números (para probar title)
+            # 6. Crear algunos nodos con números
             self.stdout.write('\nCreando nodos con contenido numérico...')
             for i in range(3):
                 numeric_content = str(random.randint(1000, 99999))
                 Node.objects.create(
                     content=f"Número {numeric_content}",
                     parent=random.choice(roots) if i % 2 == 0 else None,
+                    created_by=sudo_user  # ← ASIGNAR SUDO USER
                 )
                 self.stdout.write(f'Nodo numérico creado: "{numeric_content}"')
 
@@ -175,4 +175,5 @@ class Command(BaseCommand):
             self.stdout.write(f'Total de nodos creados: {total_nodes}')
             self.stdout.write(f'Nodos raíz: {root_count}')
             self.stdout.write(f'Nodos hoja: {leaf_count}')
+            self.stdout.write(f'Creados por: {sudo_user.username} (ID: {sudo_user.id})')
             self.stdout.write('='*50)

@@ -1,5 +1,5 @@
 # app_nodos/users/models.py
-from django.utils import timezone  # CORRECCIÓN: Import correcto
+from django.utils import timezone
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.core.exceptions import ValidationError

@@ -18,10 +18,11 @@ class IsActiveAndConfirmed(permissions.BasePermission):
         user = request.user
         
         return bool(
-            user and 
-            user.is_authenticated and 
-            user.is_active and 
-            user.is_email_confirmed
+            request.user and 
+            request.user.is_authenticated and
+            request.user.is_active and
+            request.user.is_email_confirmed and
+            not request.user.is_deleted
         )
 
 
@@ -39,12 +40,11 @@ class IsAdminUserCustom(permissions.BasePermission):
         """
         user = request.user
         
-        if not (user and user.is_authenticated):
-            return False
-            
-        is_allowed_role = user.role in ['ADMIN', 'SUDO']
-        
-        return bool(is_allowed_role and user.is_email_confirmed)
+        return bool(
+            request.user and 
+            request.user.is_authenticated and
+            request.user.role in ['ADMIN', 'SUDO']
+        )
 
 
 class IsSudoUser(permissions.BasePermission):
@@ -63,4 +63,17 @@ class IsSudoUser(permissions.BasePermission):
             user and 
             user.is_authenticated and 
             user.role == 'SUDO'
+        )
+    
+class IsOwnerOrAdmin(permissions.BasePermission):
+    """
+    Permiso que permite acceso al dueño del recurso o a ADMIN/SUDO.
+    """
+    message = "Solo puedes acceder a tu propia información o necesitas ser administrador."
+    
+    def has_object_permission(self, request, view, obj):
+        # Si es el propio usuario o es ADMIN/SUDO
+        return bool(
+            obj == request.user or
+            request.user.role in ['ADMIN', 'SUDO']
         )
