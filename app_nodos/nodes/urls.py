@@ -1,3 +1,4 @@
+# app_nodos/nodes/urls.py
 from rest_framework.routers import DefaultRouter
 from nodes.views import NodeViewSet
 

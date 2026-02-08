@@ -1,3 +1,4 @@
+# app_nodos/nodes/permissions.py
 from rest_framework import permissions
 
 class IsActiveAndConfirmed(permissions.BasePermission):

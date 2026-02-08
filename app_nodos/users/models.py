@@ -1,7 +1,9 @@
-from time import timezone
+# app_nodos/users/models.py
+from django.utils import timezone  # CORRECCIÓN: Import correcto
 from django.contrib.auth.models import AbstractUser, UserManager
 from django.db import models
 from django.core.exceptions import ValidationError
+
 
 class CustomUserManager(UserManager):
     """
@@ -11,6 +13,7 @@ class CustomUserManager(UserManager):
     (como createsuperuser) reciban automáticamente el rol 'SUDO'
     y tengan el email confirmado.
     """
+    
     def create_superuser(self, username, email=None, password=None, **extra_fields):
         """
         Sobreescribe create_superuser para asignar roles y confirmación de email.
@@ -38,15 +41,23 @@ class User(AbstractUser):
         unique=True, 
         help_text="Correo electrónico único del usuario."
     )
+    
     role = models.CharField(
         max_length=10, 
         choices=ROLE_CHOICES, 
         default='USER',
         help_text="Rol de acceso del usuario (SUDO, ADMIN, USER)."
     )
+    
     is_email_confirmed = models.BooleanField(
         default=True, 
         help_text="Indica si el usuario ha verificado su correo electrónico."
+    )
+    
+    # CORRECCIÓN: Añadir campo is_deleted que se usa en soft_delete()
+    is_deleted = models.BooleanField(
+        default=False,
+        help_text="Indica si el usuario ha sido eliminado lógicamente."
     )
 
     # Usa el Manager personalizado
@@ -74,8 +85,9 @@ class User(AbstractUser):
         Marca el usuario como eliminado y registra el timestamp.
         """
         self.is_deleted = True
-        # self.deleted_at = timezone.now()
-        self.is_active = False # Mejor práctica: Desactivar para que no pueda loguearse
+        # CORRECCIÓN: Usar timezone.now() correctamente
+        # self.deleted_at = timezone.now()  # Comentado por ahora
+        self.is_active = False  # Mejor práctica: Desactivar para que no pueda loguearse
         self.save()
 
     def __str__(self):
