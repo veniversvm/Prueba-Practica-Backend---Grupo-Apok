@@ -5,16 +5,31 @@ description = "Django project running fully on Docker"
 requires-python = ">=3.12"
 
 dependencies = [
+    # Django Core
     "Django==6.0.2",
+    
+    # Django Extensions
     "django-filter==25.2",
-    "djangorestframework==3.16.1",
-    "Markdown==3.10.1",
-    "psycopg2-binary==2.9.11",
+    "django-cors-headers==4.9.0",
+    
+    # REST Framework
     "djangorestframework==3.16.1",
     "djangorestframework-simplejwt==5.5.1",
+    
+    # Database
+    "psycopg2-binary==2.9.11",
+    
+    # Documentation
     "drf-spectacular==0.29.0",
+    "Markdown==3.10.1",
+    
+    # Internacionalización
     "num2words==0.5.14",
     "pytz==2025.2",
+    
+    # ASGI Server (Producción)
+    "uvicorn[standard]==0.40.0",
+    
 ]
 
 [build-system]

@@ -1,0 +1,37 @@
+# docker-compose.override.yml - Configuración específica para desarrollo
+services:
+  web:
+    build:
+      target: development
+    environment:
+      - DJANGO_ENV=development
+      - DEBUG=True
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./app_nodos:/app_nodos
+      - ./logs:/app_nodos/logs
+      # Montamos el entrypoint de dev explícitamente si quieres editarlo sin rebuild
+      - ./docker/django/entrypoint-dev.sh:/entrypoint.sh
+    command: python manage.py runserver 0.0.0.0:8000
+    # Configuración para Docker Compose Watch (V2)
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./app_nodos
+          target: /app_nodos
+          ignore:
+            - node_modules/
+            - .git/
+            - __pycache__/
+        - action: rebuild
+          path: pyproject.toml
+
+  # Opcional: Watcher externo
+  watch:
+    image: nodemon/nodemon
+    container_name: tree_watch
+    volumes:
+      - ./app_nodos:/app_nodos
+    command: nodemon --watch /app_nodos --ext py,html,js --exec "echo 'Cambios detectados...'"
+    profiles:
+      - tools

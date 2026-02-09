@@ -1,0 +1,28 @@
+# docker-compose.prod.yml
+services:
+  web:
+    build:
+      target: production
+    container_name: tree_app_prod
+    environment:
+      - DEBUG=False
+      - UVICORN_WORKERS=2
+      - UVICORN_LOG_LEVEL=warning
+      # AGREGA ESTA LÍNEA:
+      - RUN_SEEDERS_IN_PROD=true
+    volumes:
+      - ./logs:/app_nodos/logs
+    entrypoint: /entrypoint.sh
+    restart: always
+
+  db:
+    container_name: tree_db_prod
+    restart: always
+
+  pgbouncer:
+    container_name: tree_pgbouncer_prod
+    restart: always
+
+volumes:
+  postgres_data:
+    name: tree_postgres_data_prod

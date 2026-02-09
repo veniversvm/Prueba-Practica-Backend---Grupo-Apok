@@ -1,5 +1,5 @@
-#!/bin/sh
-
+#!/bin/bash
+#entrypoint.sh - Versión común para desarrollo y producción
 # 1. Esperar a Postgres
 echo "Esperando a Postgres..."
 while ! nc -z db 5432; do
