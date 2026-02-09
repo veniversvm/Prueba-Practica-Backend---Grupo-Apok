@@ -1,4 +1,3 @@
-
 # 🌳 Sistema de Gestión de Árboles Jerárquicos
 
 ## 📋 Descripción del Proyecto
@@ -134,11 +133,17 @@ docker-compose up --build
 POSTGRES_DB=tree_db
 POSTGRES_USER=tree_user
 POSTGRES_PASSWORD=tree_password
+POSTGRES_HOST=pgbouncer # CRÍTICO: Debe apuntar a pgbouncer
+POSTGRES_PORT=5432      # Puerto de pgbouncer
 
 # Usuario SUDO inicial
 SUDO_USERNAME=admin
 SUDO_EMAIL=admin@system.com
 SUDO_PASSWORD=Admin123!
+
+# Django
+SECRET_KEY=clave_segura_a_cambiar
+DEBUG=True
 ```
 
 ---
