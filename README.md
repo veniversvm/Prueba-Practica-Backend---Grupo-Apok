@@ -1,224 +1,315 @@
-# 🌳 Sistema de Gestión de Árboles Jerárquicos
+
+# 🌳 Sistema de Gestión de Árboles Jerárquicos - Versión Técnica Detallada
 
 ## 📋 Descripción
 
-API REST completa para gestión de estructuras jerárquicas de árboles con autenticación JWT, roles de usuario, internacionalización multi-idioma y soporte dinámico de zonas horarias.
+API REST completa para gestión de estructuras jerárquicas de árboles con autenticación JWT, roles de usuario, internacionalización multi-idioma, optimización de conexiones mediante PgBouncer y cache estratégica.
 
 ---
 
-## 🚀 Tecnologías Utilizadas
+## 🚀 Tecnologías Utilizadas - Detallado
 
-### **Backend**
+### **Backend & Framework**
 
-- **Django 6.0** - Framework web Python
-- **Django REST Framework 3.14** - Construcción de APIs RESTful
-- **PostgreSQL 15** - Base de datos relacional
-- **PgBouncer** - Connection pooling para alta concurrencia
+- **Django 6.0.2** - Framework web Python con soporte asíncrono
+- **Django REST Framework 3.16.1** - Construcción de APIs RESTful con serialización avanzada
+- **TOML para dependencias** - Gestión moderna de paquetes con `pyproject.toml`
+
+### **Base de Datos & Optimización**
+
+- **PostgreSQL 18 Alpine** - Versión ligera y eficiente (postgres:18-alpine)
+- **PgBouncer** - Connection pooling para alta concurrencia (imagen: edoburu/pgbouncer)
+- **Django Caching** - Cache integrado para reducir conexiones a base de datos
+- **Configuración PostgreSQL** - Archivo `pg_hba.conf` personalizado para red Docker
 
 ### **Autenticación & Seguridad**
 
-- **Simple JWT** - Autenticación con JSON Web Tokens
-- **Django CORS Headers** - Control de acceso entre dominios
-- **Custom Backends** - Login dual (email/username)
+- **Simple JWT 5.5.1** - Autenticación con JSON Web Tokens robusta
+- **SCRAM-SHA-256** - Autenticación moderna en PgBouncer
+- **Custom Authentication Backend** - Login dual (email/username)
+- **Django CORS Headers** - Control de acceso entre dominios seguro
 
 ### **Internacionalización**
 
-- **num2words** - Conversión de números a texto en múltiples idiomas
-- **pytz** - Manejo de zonas horarias
-- **Custom Middleware** - Procesamiento de headers Accept-Language y Time-Zone
+- **num2words 0.5.14** - Conversión de números a texto en múltiples idiomas
+- **pytz 2025.2** - Manejo completo de zonas horarias
+- **Custom Middleware** - Procesamiento dinámico de headers de idioma y zona horaria
 
-### **Documentación**
+### **Documentación & API**
 
-- **DRF Spectacular** - Generación automática de documentación OpenAPI 3.0
+- **DRF Spectacular 0.29.0** - Generación automática de documentación OpenAPI 3.0
 - **Swagger UI** - Interface interactiva para explorar la API
+- **Markdown 3.10.1** - Soporte para documentación enriquecida
 
-### **Contenerización & Desarrollo**
+### **Contenerización & Orquestación**
 
-- **Docker** - Contenerización de la aplicación
-- **Docker Compose** - Orquestación de múltiples servicios
-- **Gunicorn** - Servidor WSGI para producción
+- **Docker Compose 2.20+** - Orquestación multi-servicio con dependencias controladas
+- **Entrypoint optimizado** - Script de inicialización inteligente
+- **Network Bridge** - Red aislada `backend_net` para comunicación segura
 
-### **Testing**
+### **Testing & Calidad**
 
 - **Django Test Framework** - Suite completa de pruebas unitarias
-- **Coverage.py** - Análisis de cobertura de código
+- **Coverage.py** - Análisis de cobertura de código exhaustivo
 
 ---
 
-## 🏗️ Arquitectura del Proyecto
+## 🏗️ Arquitectura del Sistema - Infraestructura Docker
 
-### **Módulos Principales**
+### **Servicios Configurados**
 
-| Módulo                    | Descripción                                                                  | Tecnologías Clave                                |
-| -------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
-| **🔒 `users`**     | Gestión de usuarios, autenticación JWT y sistema de roles (SUDO/ADMIN/USER) | Simple JWT, Custom Backends, Soft Delete          |
-| **📂 `nodes`**     | Árboles jerárquicos con internacionalización y zonas horarias dinámicas   | num2words, pytz, Caching, Recursive Serialization |
-| **🌐 `app_nodos`** | Configuración principal y middleware personalizado                           | Django Settings, Timezone Middleware              |
+| Servicio             | Imagen/Config      | Puerto         | Propósito              | Dependencias |
+| -------------------- | ------------------ | -------------- | ----------------------- | ------------ |
+| **PostgreSQL** | postgres:18-alpine | 5432 (interno) | Base de datos principal | -            |
+| **PgBouncer**  | edoburu/pgbouncer  | 6432 (host)    | Pool de conexiones      | PostgreSQL   |
+| **Django App** | Custom Dockerfile  | 8000           | Aplicación principal   | PgBouncer    |
 
-### **Estructura de Carpetas**
+### **Flujo de Conexiones Optimizado**
 
 ```
-app_nodos/
-├── app_nodos/          # Configuración principal
-├── users/              # 🔒 Módulo de usuarios
-├── nodes/              # 📂 Módulo de nodos jerárquicos
-├── middleware/         # Middleware personalizado
-├── docker-compose.yml  # Orquestación Docker
-├── Dockerfile         # Contenerización
-└── requirements.txt   # Dependencias Python
+Aplicación Django → PgBouncer (Pool: 20 conexiones) → PostgreSQL
 ```
 
----
+- **Modo transacción**: Configuración óptima para Django
+- **Max conexiones**: 100 clientes, pool de 20
+- **Cache Django**: Reduce necesidad de nuevas conexiones
 
-## ✨ Características Principales
+### **Configuración PostgreSQL Personalizada**
 
-### **🔐 Sistema de Autenticación**
+```sql
+# postgres/pg_hba.conf
+host    tree_db     tree_user    172.20.0.0/16     md5
+host    all         all          127.0.0.1/32      md5
+host    all         all          ::1/128           md5
+```
 
-- Login dual con email o username
-- JWT con tokens de acceso y refresh
-- Confirmación de email requerida
-- Roles jerárquicos: SUDO > ADMIN > USER
-
-### **🌍 Internacionalización Avanzada**
-
-- 8 idiomas soportados (ES, EN, FR, DE, IT, PT, RU, AR)
-- Conversión automática de IDs a texto (`1` → `"uno"`)
-- Headers `Accept-Language` para selección dinámica
-
-### **🕐 Zonas Horarias Dinámicas**
-
-- Soporte para 500+ zonas horarias
-- Header `Time-Zone` para conversión automática
-- Normalización de abreviaturas (EST, CET, PST)
-
-### **🌳 Gestión Jerárquica**
-
-- Árboles de profundidad configurable
-- Parámetro `?depth` para control de recursividad
-- Soft delete con validación de integridad
-- Caching estratégico de 180 segundos
-
-### **⚡ Optimizaciones de Performance**
-
-- Connection pooling con PgBouncer
-- Caching en endpoints de listado
-- Querysets optimizados con `select_related`
-- Validación temprana de inputs
+- **Red específica**: Solo permite conexiones desde la red Docker interna
+- **Seguridad**: No expone PostgreSQL directamente al host
 
 ---
 
-## 📊 Stack Tecnológico Completo
+## 🔄 Proceso de Inicialización (Entrypoint.sh)
+
+### **Fases de Arranque**
+
+1. **Espera para PostgreSQL** (Health Check)
+
+   ```bash
+   while ! nc -z db 5432; do sleep 0.1; done
+   ```
+2. **Migraciones de Base de Datos**
+
+   ```bash
+   python manage.py migrate --noinput
+   ```
+3. **Configuración de Usuario SUDO**
+
+   ```bash
+   python manage.py setup_sudo  # Creado desde variables .env
+   ```
+4. **Población de Datos de Prueba**
+
+   ```bash
+   python manage.py seed_users   # Usuarios ADMIN y USER
+   python manage.py seed_nodes   # Árbol jerárquico con auditoría
+   ```
+5. **Inicio del Servidor Django**
+
+   ```bash
+   exec "$@"  # Ejecuta el comando principal (runserver/gunicorn)
+   ```
+
+---
+
+## ⚡ Optimizaciones de Performance Específicas
+
+### **Connection Pooling con PgBouncer**
 
 ```yaml
-Web Framework:
-  - Django 6.0
-  - Django REST Framework 3.14
+# Configuración en docker-compose.yml
+pgbouncer:
+  environment:
+    - POOL_MODE=transaction  # CRÍTICO para Django
+    - MAX_CLIENT_CONN=100
+    - DEFAULT_POOL_SIZE=20
+    - AUTH_TYPE=scram-sha-256
+```
 
-Base de Datos:
-  - PostgreSQL 15
-  - PgBouncer (connection pooling)
+- **Evita sobrecarga**: Reutiliza conexiones PostgreSQL
+- **Alta concurrencia**: Soporta 100+ usuarios simultáneos
+- **Autenticación segura**: SCRAM-SHA-256 moderno
 
-Autenticación:
-  - Django Simple JWT
-  - Custom Authentication Backend
+### **Estrategia de Cache Django**
 
-Internacionalización:
-  - num2words 0.5.10
-  - pytz 2023.3
+- **Cache de 180 segundos** en endpoints de listado
+- **Reducción de queries** con `select_related` y `prefetch_related`
+- **Validación temprana** para evitar procesamiento innecesario
 
-Documentación:
-  - DRF Spectacular 0.26
-  - Swagger UI
+### **Configuración de Red Aislada**
 
-Contenerización:
-  - Docker 24+
-  - Docker Compose 2.20+
-  - Gunicorn 21.2
+```yaml
+networks:
+  backend_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16  # Subnet específica
+```
 
-Desarrollo:
-  - Python 3.11+
-  - Git
-  - Make (opcional)
+- **Seguridad**: Contenedores aislados del host
+- **Rendimiento**: Comunicación interna optimizada
+
+---
+
+## 📦 Gestión de Dependencias Moderna
+
+### **Archivo `pyproject.toml`**
+
+```toml
+[project]
+name = "tree"
+version = "1.0.0"
+description = "Django project running fully on Docker"
+requires-python = ">=3.12"
+
+dependencies = [
+    "Django==6.0.2",
+    "django-filter==25.2",
+    "djangorestframework==3.16.1",
+    "Markdown==3.10.1",
+    "psycopg2-binary==2.9.11",
+    "djangorestframework-simplejwt==5.5.1",
+    "drf-spectacular==0.29.0",
+    "num2words==0.5.14",
+    "pytz==2025.2",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+```
+
+### **Ventajas de TOML sobre requirements.txt**
+
+- **Metadatos estructurados**: Versión, descripción, Python mínimo
+- **Build system integrado**: Configuración de construcción incluida
+- **Futuro-proof**: Estándar PEP 621 moderno
+
+---
+
+## 🛡️ Características de Seguridad
+
+### **Por Capas de Infraestructura**
+
+1. **Red Aislada**: `backend_net` con subnet específica
+2. **PgBouncer como firewall**: PostgreSQL no expuesto directamente
+3. **Autenticación JWT**: Tokens firmados con expiración
+4. **Configuración PostgreSQL**: Solo conexiones desde red interna
+
+### **Autenticación de Base de Datos**
+
+- **Django → PgBouncer**: Credenciales desde .env
+- **PgBouncer → PostgreSQL**: Autenticación MD5 (configuración pg_hba.conf)
+- **Encriptación**: SCRAM-SHA-256 para autenticación segura
+
+---
+
+## 🔧 Flujo de Desarrollo y Deployment
+
+### **Desarrollo Local**
+
+```bash
+# Iniciar todos los servicios
+docker-compose up
+
+# Acceder a la aplicación
+http://localhost:8000/api/docs/
+
+# Conectar a PostgreSQL vía PgBouncer
+psql -h localhost -p 6432 -U tree_user tree_db
+```
+
+### **Comandos Útiles**
+
+```bash
+# Ver logs específicos
+docker-compose logs -f web
+docker-compose logs -f pgbouncer
+
+# Ejecutar comandos Django
+docker-compose exec web python manage.py shell
+
+# Reconstruir servicios
+docker-compose up --build
 ```
 
 ---
 
-## 🎯 Casos de Uso
+## 📊 Métricas y Monitoreo
 
-- **Gestión organizacional** - Estructuras jerárquicas de empresas
-- **Sistemas de categorías** - Categorías y subcategorías anidadas
-- **Menús dinámicos** - Navegación jerárquica multi-idioma
-- **Control de acceso** - Permisos basados en roles jerárquicos
-- **Aplicaciones multi-región** - Soporte para múltiples zonas horarias
+### **PgBouncer Statistics**
 
----
+```sql
+-- Conectar a PgBouncer (puerto 6432)
+SHOW POOLS;
+SHOW STATS;
+SHOW CLIENTS;
+```
 
-## 🔧 Requisitos del Sistema
+### **Indicadores Clave**
 
-### **Mínimos**
-
-- Docker 20.10+
-- Docker Compose 2.20+
-- 2GB RAM disponible
-- 1GB espacio en disco
-
-### **Recomendados**
-
-- Docker 24+
-- Docker Compose 2.24+
-- 4GB RAM
-- 2GB espacio en disco
-- CPU multi-core
+- **Pool usage**: Conexiones activas/inactivas
+- **Query timing**: Tiempos promedio de consulta
+- **Cache hit rate**: Efectividad de cache Django
+- **Connection churn**: Nuevas conexiones vs reutilizadas
 
 ---
 
-## 📈 Métricas Técnicas
+## 🚦 Estado del Sistema
 
-- **Tiempo de respuesta**: < 200ms (endpoints con cache)
-- **Concurrencia**: 100+ usuarios simultáneos
-- **Disponibilidad**: 99.9% (con configuración adecuada)
-- **Cobertura de tests**: > 90% por módulo
-- **Tamaño de imagen Docker**: ~500MB
+**✅ Producción Optimizada**
 
----
-
-## 🚦 Estado del Proyecto
-
-**✅ Producción Lista**
-
-- [X] API completa y documentada
-- [X] Suite de tests exhaustiva
-- [X] Contenerización Docker
-- [X] Configuración para producción
-- [X] Monitoreo básico y logs
-- [X] Backup y recovery procedures
+- [X] **Infraestructura Docker completa** con 3 servicios coordinados
+- [X] **Connection pooling** con PgBouncer para alta concurrencia
+- [X] **Inicialización automática** con entrypoint inteligente
+- [X] **Configuración PostgreSQL** segura y aislada
+- [X] **Gestión moderna de dependencias** con TOML
+- [X] **Red aislada** con subnet específica para seguridad
+- [X] **Health checks** para verificación de servicios
 
 ---
 
-## 📄 Licencia
+## ⚠️ Consideraciones Técnicas Importantes
 
-MIT License - Ver archivo `LICENSE` para más detalles.
+### **Para Producción**
 
----
+1. **Variables de entorno**: Todas las credenciales via .env
+2. **Backups PostgreSQL**: Volume `postgres_data` persistente
+3. **Monitoring PgBouncer**: Estadísticas críticas para escalabilidad
+4. **Escalabilidad**: Aumentar `DEFAULT_POOL_SIZE` según carga
 
-## 🤝 Contribuir
+### **Configuraciones Críticas**
 
-1. Fork el repositorio
-2. Crear rama de feature (`git checkout -b feature/AmazingFeature`)
-3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abrir Pull Request
-
----
-
-## 📞 Contacto y Soporte
-
-- **Issues**: [GitHub Issues](link)
-- **Documentación**: `/api/docs/` cuando el proyecto esté ejecutándose
-- **Email**: desarrollo@empresa.com
+```yaml
+# NO cambiar sin entender implicaciones
+POOL_MODE: transaction  # Django requiere este modo
+AUTH_TYPE: scram-sha-256  # Autenticación moderna
+DB_HOST: pgbouncer  # Django debe apuntar a PgBouncer, no a DB directo
+```
 
 ---
 
-**Versión**: 1.0.0
+## 🔄 Workflow de Actualización
+
+1. **Actualizar dependencias** en `pyproject.toml`
+2. **Reconstruir imagen** de Django
+3. **Mantener volumen** de PostgreSQL para persistencia
+4. **Verificar configuración** de PgBouncer
+5. **Testear conexiones** en entorno staging
+
+---
+
+**Versión Técnica**: 1.0.0
 **Última actualización**: Febrero 2026
-**Desarrollado con**: Python 🐍, Django 🌐, Docker 🐳
+**Arquitectura**: Microservicios Docker con optimización PgBouncer
+**Soporte**: Red aislada + Connection Pooling + Cache Estratégico

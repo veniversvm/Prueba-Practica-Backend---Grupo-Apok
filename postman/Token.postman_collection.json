@@ -1,0 +1,779 @@
+{
+  "info": {
+    "_postman_id": "e9578b0f-5b9f-4464-bae5-c0589bd5eabc",
+    "name": "Token",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "52193681",
+    "_collection_link": "https://go.postman.co/collection/52193681-e9578b0f-5b9f-4464-bae5-c0589bd5eabc?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Login_Sudo",
+      "item": [
+        {
+          "name": "Login_Sudo_Username_Succed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Prueba de Login y Asignación de Variables",
+                  "",
+                  "// 1. Verificar el Código de Estado (Status Code)",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// 2. Verificar que el cuerpo de la respuesta es JSON y parsearlo",
+                  "var jsonData = pm.response.json();",
+                  "",
+                  "// 3. Verificar la existencia y el tipo de los tokens",
+                  "pm.test(\"Token 'access' exists and is a string\", function () {",
+                  "    pm.expect(jsonData.access).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test(\"Token 'refresh' exists and is a string\", function () {",
+                  "    pm.expect(jsonData.refresh).to.be.a('string');",
+                  "});",
+                  "",
+                  "// 4. [CRUCIAL] Asignar el token de acceso a una variable de ENTORNO",
+                  "// Esto permite usar {{access_token}} en todas las peticiones protegidas.",
+                  "pm.environment.set(\"access_token\", jsonData.access);",
+                  "",
+                  "// 5. Verificar que la variable se ha guardado",
+                  "pm.test(\"Access Token is saved to environment variable\", function() {",
+                  "    pm.expect(pm.environment.get(\"access_token\")).to.equal(jsonData.access);",
+                  "});",
+                  "",
+                  "// 6. Verificar la existencia del campo de usuario (opcional, para auditoría)",
+                  "// pm.test(\"User ID (user_id) is present in the token claims\", function() {",
+                  "//     // Nota: Esto requiere que decodifiques el token o verifiques el claim en el body.",
+                  "//     // Es más simple verificar que el token exista (paso 4).",
+                  "// });"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{SUDOUSERNAME}}\",\n  \"password\": \"{{SUDOUSERPASS}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login_Sudo_Email_Succed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Prueba de Login y Asignación de Variables",
+                  "",
+                  "// 1. Verificar el Código de Estado (Status Code)",
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// 2. Verificar que el cuerpo de la respuesta es JSON y parsearlo",
+                  "var jsonData = pm.response.json();",
+                  "",
+                  "// 3. Verificar la existencia y el tipo de los tokens",
+                  "pm.test(\"Token 'access' exists and is a string\", function () {",
+                  "    pm.expect(jsonData.access).to.be.a('string');",
+                  "});",
+                  "",
+                  "pm.test(\"Token 'refresh' exists and is a string\", function () {",
+                  "    pm.expect(jsonData.refresh).to.be.a('string');",
+                  "});",
+                  "",
+                  "// 4. [CRUCIAL] Asignar el token de acceso a una variable de ENTORNO",
+                  "// Esto permite usar {{access_token}} en todas las peticiones protegidas.",
+                  "pm.environment.set(\"access_token\", jsonData.access);",
+                  "",
+                  "// 5. Verificar que la variable se ha guardado",
+                  "pm.test(\"Access Token is saved to environment variable\", function() {",
+                  "    pm.expect(pm.environment.get(\"access_token\")).to.equal(jsonData.access);",
+                  "});",
+                  "",
+                  "// 6. Verificar la existencia del campo de usuario (opcional, para auditoría)",
+                  "// pm.test(\"User ID (user_id) is present in the token claims\", function() {",
+                  "//     // Nota: Esto requiere que decodifiques el token o verifiques el claim en el body.",
+                  "//     // Es más simple verificar que el token exista (paso 4).",
+                  "// });"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{SUDOMAIL}}\",\n  \"password\": \"{{SUDOUSERPASS}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login_Sudo_BadUsername_Fail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "// 2. Verificar que la respuesta NO contiene tokens",
+                  "pm.test(\"Response does NOT contain an access token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.access).to.be.undefined;",
+                  "});",
+                  "",
+                  "// 3. Verificar Mensaje de Error Genérico (No revela la causa exacta)",
+                  "pm.test(\"Error message is generic (security best practice)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "",
+                  "    pm.expect(jsonData.detail).to.be.a('string');",
+                  "",
+                  "    // Check that the message contains either \"No active account\" or \"Invalid credential\"",
+                  "    var detail = jsonData.detail || \"\";",
+                  "    var hasExpectedText =",
+                  "        detail.includes('No active account') ||",
+                  "        detail.includes('Invalid credential');",
+                  "",
+                  "    pm.expect(hasExpectedText, 'Detail should be a generic auth error').to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"fake_username\",\n  \"password\": \"{{SUDOUSERPASS}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login_Sudo_BadPass_Fail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "// 2. Verificar que la respuesta NO contiene tokens",
+                  "pm.test(\"Response does NOT contain an access token\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.access).to.be.undefined;",
+                  "});",
+                  "",
+                  "// 3. Verificar Mensaje de Error Genérico (No revela la causa exacta)",
+                  "pm.test(\"Error message is generic (security best practice)\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "",
+                  "    pm.expect(jsonData.detail).to.be.a('string');",
+                  "",
+                  "    // Check that the message contains either \"No active account\" or \"Invalid credential\"",
+                  "    var detail = jsonData.detail || \"\";",
+                  "    var hasExpectedText =",
+                  "        detail.includes('No active account') ||",
+                  "        detail.includes('Invalid credential');",
+                  "",
+                  "    pm.expect(hasExpectedText, 'Detail should be a generic auth error').to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{SUDOUSERNAME}}\",\n  \"password\": \"123456789\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get_Must_Fail_405",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Prueba de Rechazo de Método HTTP Incorrecto (Seguridad)",
+                  "",
+                  "// 1. Verificar el Código de Estado (Debe ser 405 Method Not Allowed)",
+                  "pm.test(\"Status code is 405 Method Not Allowed\", function () {",
+                  "    pm.response.to.have.status(405);",
+                  "});",
+                  "",
+                  "// 2. Verificar el Mensaje de Error",
+                  "pm.test(\"Response body contains the correct error message\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    ",
+                  "    // El mensaje por defecto de DRF para 405 incluye los métodos aceptados",
+                  "    pm.expect(jsonData.detail).to.be.a('string');",
+                  "    pm.expect(jsonData.detail).to.include(\"Method \\\"GET\\\" not allowed.\"); ",
+                  "});",
+                  "",
+                  "// 3. Opcional: Verificar que el header 'Allow' exista",
+                  "pm.test(\"Response includes 'Allow' header (Best Practice)\", function () {",
+                  "    pm.expect(pm.response.headers.get('Allow')).to.include('POST');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Patch_Must_Fail_405",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Prueba de Rechazo de Método HTTP Incorrecto (Seguridad)",
+                  "",
+                  "// 1. Verificar el Código de Estado (Debe ser 405 Method Not Allowed)",
+                  "pm.test(\"Status code is 405 Method Not Allowed\", function () {",
+                  "    pm.response.to.have.status(405);",
+                  "});",
+                  "",
+                  "// 2. Verificar el Mensaje de Error",
+                  "pm.test(\"Response body contains the correct error message\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    ",
+                  "    // El mensaje por defecto de DRF para 405 incluye los métodos aceptados",
+                  "    pm.expect(jsonData.detail).to.be.a('string');",
+                  "    pm.expect(jsonData.detail).to.include(\"Method \\\"PATCH\\\" not allowed.\"); ",
+                  "});",
+                  "",
+                  "// 3. Opcional: Verificar que el header 'Allow' exista",
+                  "pm.test(\"Response includes 'Allow' header (Best Practice)\", function () {",
+                  "    pm.expect(pm.response.headers.get('Allow')).to.include('POST');",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Refresh_Token",
+      "item": [
+        {
+          "name": "Sudo_Token_Refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "let jsonData = null;",
+                  "try {",
+                  "    jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "    // Si falla el parseo, jsonData se queda en null",
+                  "}",
+                  "",
+                  "// 1. Status",
+                  "pm.test(\"Refresh - Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "// 2. Respuesta JSON cuando es 200",
+                  "pm.test(\"Refresh - Body es JSON cuando status es 200\", function () {",
+                  "    if (pm.response.code === 200) {",
+                  "        pm.expect(jsonData, \"Body debe ser JSON\").to.be.an(\"object\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// 3. Debe existir access token",
+                  "pm.test(\"Refresh - Respuesta tiene access token\", function () {",
+                  "    if (pm.response.code !== 200 || !jsonData) {",
+                  "        pm.expect.fail(\"No se puede validar access token: status != 200 o body no es JSON\");",
+                  "    }",
+                  "    pm.expect(jsonData).to.have.property(\"access\");",
+                  "    pm.expect(jsonData.access).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.access.length).to.be.greaterThan(10);",
+                  "});",
+                  "",
+                  "// 4. Formato JWT",
+                  "pm.test(\"Refresh - access token tiene formato JWT\", function () {",
+                  "    if (!jsonData || !jsonData.access) {",
+                  "        pm.expect.fail(\"No se puede validar formato JWT: falta access token\");",
+                  "    }",
+                  "    const parts = jsonData.access.split(\".\");",
+                  "    pm.expect(parts.length).to.equal(3);",
+                  "});",
+                  "",
+                  "// 5. Es diferente al access anterior (si existe)",
+                  "pm.test(\"Refresh - Nuevo token es distinto al anterior\", function () {",
+                  "    if (!jsonData || !jsonData.access) {",
+                  "        pm.expect.fail(\"No se puede comparar tokens: falta access token\");",
+                  "    }",
+                  "    const oldAccess = pm.environment.get(\"temp_access_token\");",
+                  "    const newAccess = jsonData.access;",
+                  "",
+                  "    if (oldAccess) {",
+                  "        pm.expect(newAccess).to.not.equal(oldAccess);",
+                  "        console.log(\"✓ Nuevo token generado (diferente al anterior)\");",
+                  "    } else {",
+                  "        console.log(\"⚠ No había access_token anterior para comparar\");",
+                  "    }",
+                  "});",
+                  "",
+                  "// 6. Guardar nuevo access",
+                  "if (pm.response.code === 200 && jsonData && jsonData.access) {",
+                  "    pm.environment.set(\"temp_new_access_token\", jsonData.access);",
+                  "    pm.environment.set(\"access_token\", jsonData.access);",
+                  "    console.log(\"✓ Refresh exitoso. Nuevo access guardado.\");",
+                  "} else {",
+                  "    console.log(\"⚠ Refresh no exitoso. Código:\", pm.response.code);",
+                  "    console.log(\"Body:\", pm.response.text());",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "console.log(\"=== Pre-request: Login y obtención de tokens ===\");",
+                  "",
+                  "// Configuración básica",
+                  "const baseUrl = pm.environment.get(\"base_url\") || pm.globals.get(\"LOCAL\");",
+                  "const username = pm.environment.get(\"SUDOUSERNAME\") || pm.globals.get(\"SUDOUSERNAME\");",
+                  "const password = pm.environment.get(\"SUDOUSERPASS\") || pm.globals.get(\"SUDOUSERPASS\");",
+                  "",
+                  "if (!baseUrl) {",
+                  "    throw new Error(\"No se encontró 'base_url' ni 'LOCAL'. Configura una de estas variables (ej: http://localhost:8000).\");",
+                  "}",
+                  "if (!username || !password) {",
+                  "    throw new Error(\"Variables SUDOUSERNAME o SUDOUSERPASS no están definidas.\");",
+                  "}",
+                  "",
+                  "const loginUrl = baseUrl.replace(/\\/+$/, \"\") + \"/token/\"; // o \"/api/token/\" según tu backend",
+                  "",
+                  "const loginRequest = {",
+                  "    url: loginUrl,",
+                  "    method: \"POST\",",
+                  "    header: {",
+                  "        \"Content-Type\": \"application/json\",",
+                  "        \"Accept\": \"application/json\"",
+                  "    },",
+                  "    body: {",
+                  "        mode: \"raw\",",
+                  "        raw: JSON.stringify({",
+                  "            username: username,",
+                  "            password: password",
+                  "        })",
+                  "    }",
+                  "};",
+                  "",
+                  "pm.sendRequest(loginRequest, function (err, response) {",
+                  "    if (err) {",
+                  "        console.error(\"Error en login:\", err);",
+                  "        throw new Error(\"No se pudo obtener tokens: \" + err.message);",
+                  "    }",
+                  "",
+                  "    if (response.code !== 200) {",
+                  "        console.log(\"Body login:\", response.text());",
+                  "        throw new Error(\"Login falló. Código: \" + response.code);",
+                  "    }",
+                  "",
+                  "    let loginData;",
+                  "    try {",
+                  "        loginData = response.json();",
+                  "    } catch (e) {",
+                  "        throw new Error(\"La respuesta de login no es JSON válido.\");",
+                  "    }",
+                  "",
+                  "    if (!loginData.access || !loginData.refresh) {",
+                  "        console.log(\"Body login:\", loginData);",
+                  "        throw new Error(\"La respuesta de login no contiene 'access' y/o 'refresh'.\");",
+                  "    }",
+                  "",
+                  "    // Guardar tokens para otros requests, si los necesitas",
+                  "    pm.environment.set(\"access_token\", loginData.access);",
+                  "    pm.environment.set(\"refresh_token\", loginData.refresh);",
+                  "    pm.environment.set(\"temp_access_token\", loginData.access);",
+                  "    pm.environment.set(\"temp_refresh_token\", loginData.refresh);",
+                  "",
+                  "    // Asegurar solo headers, NO tocar el body",
+                  "    pm.request.headers.upsert({",
+                  "        key: \"Content-Type\",",
+                  "        value: \"application/json\"",
+                  "    });",
+                  "    pm.request.headers.upsert({",
+                  "        key: \"Accept\",",
+                  "        value: \"application/json\"",
+                  "    });",
+                  "",
+                  "    // ⚠ NO actualizar el body aquí, dejamos el body inválido que seteaste tú a mano",
+                  "    // pm.request.body.update({ ... });",
+                  "",
+                  "    console.log(\"✓ Login OK. Usando body de refresh tal como está configurado en el request (debería ser inválido).\");",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/refresh/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                "refresh",
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sudo_Token_Refresh_Fail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "let jsonData = null;",
+                  "try {",
+                  "    jsonData = pm.response.json();",
+                  "} catch (e) {",
+                  "    pm.test(\"Body es JSON válido\", function () {",
+                  "        pm.expect.fail(\"El body no es JSON válido\");",
+                  "    });",
+                  "}",
+                  "",
+                  "// 1. Status debe ser 401",
+                  "pm.test(\"Refresh FAIL - Status es 401 (Token inválido)\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "// 2. Body debe ser un objeto JSON",
+                  "pm.test(\"Refresh FAIL - Body es JSON (objeto)\", function () {",
+                  "    pm.expect(jsonData, \"Body debe ser un objeto JSON\").to.be.an(\"object\");",
+                  "});",
+                  "",
+                  "// 3. Debe traer 'detail' y 'code'",
+                  "pm.test(\"Refresh FAIL - Contiene campos de error 'detail' y 'code'\", function () {",
+                  "    pm.expect(jsonData).to.have.property(\"detail\");",
+                  "    pm.expect(jsonData.detail).to.be.a(\"string\");",
+                  "",
+                  "    pm.expect(jsonData).to.have.property(\"code\");",
+                  "    pm.expect(jsonData.code).to.be.a(\"string\");",
+                  "});",
+                  "",
+                  "// 4. Mensajes específicos esperados",
+                  "pm.test(\"Refresh FAIL - Mensaje de error esperado\", function () {",
+                  "    pm.expect(jsonData.detail).to.equal(\"Token is invalid\");",
+                  "    pm.expect(jsonData.code).to.equal(\"token_not_valid\");",
+                  "});",
+                  "",
+                  "// 5. La respuesta NO debe tener access token",
+                  "pm.test(\"Refresh FAIL - Respuesta NO tiene access token\", function () {",
+                  "    pm.expect(jsonData).to.not.have.property(\"access\");",
+                  "});",
+                  "",
+                  "// 6. Log informativo (no afecta tests)",
+                  "if (pm.response.code === 401 &&",
+                  "    jsonData &&",
+                  "    jsonData.detail === \"Token is invalid\" &&",
+                  "    jsonData.code === \"token_not_valid\") {",
+                  "",
+                  "    console.log(\"✓ Refresh inválido evaluado correctamente.\");",
+                  "} else {",
+                  "    console.log(\"⚠ La respuesta del refresh inválido no cumple el contrato esperado.\", {",
+                  "        status: pm.response.code,",
+                  "        body: jsonData",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "console.log(\"=== Pre-request: Login y obtención de tokens ===\");",
+                  "",
+                  "// Configuración básica",
+                  "const baseUrl = pm.environment.get(\"base_url\") || pm.globals.get(\"LOCAL\");",
+                  "const username = pm.environment.get(\"SUDOUSERNAME\") || pm.globals.get(\"SUDOUSERNAME\");",
+                  "const password = pm.environment.get(\"SUDOUSERPASS\") || pm.globals.get(\"SUDOUSERPASS\");",
+                  "",
+                  "if (!baseUrl) {",
+                  "    throw new Error(\"No se encontró 'base_url' ni 'LOCAL'. Configura una de estas variables (ej: http://localhost:8000).\");",
+                  "}",
+                  "if (!username || !password) {",
+                  "    throw new Error(\"Variables SUDOUSERNAME o SUDOUSERPASS no están definidas.\");",
+                  "}",
+                  "",
+                  "const loginUrl = baseUrl.replace(/\\/+$/, \"\") + \"/token/\"; // o \"/api/token/\" según tu backend",
+                  "",
+                  "const loginRequest = {",
+                  "    url: loginUrl,",
+                  "    method: \"POST\",",
+                  "    header: {",
+                  "        \"Content-Type\": \"application/json\",",
+                  "        \"Accept\": \"application/json\"",
+                  "    },",
+                  "    body: {",
+                  "        mode: \"raw\",",
+                  "        raw: JSON.stringify({",
+                  "            username: username,",
+                  "            password: password",
+                  "        })",
+                  "    }",
+                  "};",
+                  "",
+                  "pm.sendRequest(loginRequest, function (err, response) {",
+                  "    if (err) {",
+                  "        console.error(\"Error en login:\", err);",
+                  "        throw new Error(\"No se pudo obtener tokens: \" + err.message);",
+                  "    }",
+                  "",
+                  "    if (response.code !== 200) {",
+                  "        console.log(\"Body login:\", response.text());",
+                  "        throw new Error(\"Login falló. Código: \" + response.code);",
+                  "    }",
+                  "",
+                  "    let loginData;",
+                  "    try {",
+                  "        loginData = response.json();",
+                  "    } catch (e) {",
+                  "        throw new Error(\"La respuesta de login no es JSON válido.\");",
+                  "    }",
+                  "",
+                  "    if (!loginData.access || !loginData.refresh) {",
+                  "        console.log(\"Body login:\", loginData);",
+                  "        throw new Error(\"La respuesta de login no contiene 'access' y/o 'refresh'.\");",
+                  "    }",
+                  "",
+                  "    // Guardar tokens para otros requests, si los necesitas",
+                  "    pm.environment.set(\"access_token\", loginData.access);",
+                  "    pm.environment.set(\"refresh_token\", loginData.refresh);",
+                  "    pm.environment.set(\"temp_access_token\", loginData.access);",
+                  "    pm.environment.set(\"temp_refresh_token\", loginData.refresh);",
+                  "",
+                  "    // Asegurar solo headers, NO tocar el body",
+                  "    pm.request.headers.upsert({",
+                  "        key: \"Content-Type\",",
+                  "        value: \"application/json\"",
+                  "    });",
+                  "    pm.request.headers.upsert({",
+                  "        key: \"Accept\",",
+                  "        value: \"application/json\"",
+                  "    });",
+                  "",
+                  "    // ⚠ NO actualizar el body aquí, dejamos el body inválido que seteaste tú a mano",
+                  "    // pm.request.body.update({ ... });",
+                  "",
+                  "    console.log(\"✓ Login OK. Usando body de refresh tal como está configurado en el request (debería ser inválido).\");",
+                  "});"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"este_debe_fallar\"\n}\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{LOCAL}}/token/refresh/",
+              "host": [
+                "{{LOCAL}}"
+              ],
+              "path": [
+                "token",
+                "refresh",
+                ""
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
