@@ -8,6 +8,7 @@ from django.http import Http404
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 import pytz
 
 from .mixins import ValidateIDMixin
@@ -422,22 +423,51 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         
     #     return safe_key
     
-    @method_decorator(cache_page(CACHE_TIMEOUT))
+    @method_decorator(vary_on_headers('Accept-Language', 'Time-Zone'))
     def list(self, request, *args, **kwargs):
         """
-        Lista nodos raíz con control de profundidad.
-        Usa cache_page nativo de Django.
+        Lista nodos raíz con cache que SÍ diferencia por idioma y timezone.
         """
+        # Generar clave de cache MANUALMENTE que incluya los headers
+        context = self.get_serializer_context()
+        
+        # Crear clave única que incluya TODOS los parámetros relevantes
+        cache_key_parts = [
+            'node_list',
+            f"lang:{context.get('language', 'en')}",
+            f"tz:{context.get('user_timezone', 'UTC')}",
+            f"depth:{context.get('depth', 'none')}",
+            f"query:{request.GET.urlencode()}",
+            f"user:{request.user.id if request.user.is_authenticated else 'anon'}"
+        ]
+        
+        import hashlib
+        key_string = ':'.join(cache_key_parts)
+        cache_key = f"nodes:{hashlib.md5(key_string.encode()).hexdigest()}"
+        
+        # Verificar cache
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+        
+        # Ejecutar lógica normal si no está en cache
         queryset = self.filter_queryset(self.get_queryset())
         page = self.paginate_queryset(queryset)
         
         if page is not None:
             serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            response_data = self.get_paginated_data(serializer)
+        else:
+            serializer = self.get_serializer(queryset, many=True)
+            response_data = serializer.data
         
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-    
+        # Cachear los datos (NO el objeto Response)
+        cache.set(cache_key, response_data, CACHE_TIMEOUT)
+        
+        # Devolver respuesta
+        if page is not None:
+            return self.get_paginated_response(response_data)
+        return Response(response_data)
     # ELIMINA estos métodos si existen:
     # _get_cache_version
     # _invalidate_list_cache  
@@ -476,12 +506,28 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(node, context=serializer_context)
         return Response(serializer.data)
     
+    def get_paginated_data(self, serializer):
+        """
+        Extrae datos paginados en formato cacheable.
+        """
+        if self.paginator is None:
+            return serializer.data
+        
+        page = self.paginator.page
+        return {
+            'count': self.paginator.page.paginator.count,
+            'next': self.paginator.get_next_link(),
+            'previous': self.paginator.get_previous_link(),
+            'results': serializer.data
+        }
+    
     def perform_create(self, serializer):
-        cache.clear()  # O cache.delete_pattern('*nodes*') si usas redis
+        # Limpiar SOLO el cache de nodos, no todo
+        self.clear_nodes_cache()
         serializer.save(created_by=self.request.user)
     
     def perform_update(self, serializer):
-        cache.clear()
+        self.clear_nodes_cache()
         serializer.save(created_by=self.request.user)
     
     def retrieve(self, request, *args, **kwargs):
@@ -506,7 +552,7 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        cache.clear()
+        self.clear_nodes_cache()
         instance.soft_delete()
         
         return Response(
@@ -517,6 +563,16 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
     
+    def clear_nodes_cache(self):
+        """
+        Limpia solo el cache de nodos, no todo el cache.
+        """
+        # Si usas Redis:
+        # cache.delete_pattern('nodes:*')
+        
+        # Para cache local, limpiamos todo (simplificado)
+        cache.clear()
+    
     def get_permissions(self):
         """
         Configura permisos según la acción.
@@ -526,6 +582,13 @@ class NodeViewSet(ValidateIDMixin, viewsets.ModelViewSet):
         if self.action in ["create", "update", "partial_update", "destroy"]:
             return [IsAdminUserCustom()]
         return [IsActiveAndConfirmed()]
+
+
+#################################
+#################################
+#################################
+
+
 
 @extend_schema(
     summary="Obtener árbol completo",

@@ -66,12 +66,12 @@ class Node(models.Model):
             UniqueConstraint(
                 fields=['content', 'parent'], 
                 name='unique_content_per_parent',
-                condition=Q(is_deleted=False, parent__isnull=False)
+                condition=Q(parent__isnull=False)
             ),
             UniqueConstraint(
                 fields=['content'], 
                 name='unique_content_for_roots',
-                condition=Q(is_deleted=False, parent__isnull=True)
+                condition=Q(parent__isnull=True)
             )
         ]
 

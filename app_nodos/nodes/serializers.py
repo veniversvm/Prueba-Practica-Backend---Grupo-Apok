@@ -124,7 +124,8 @@ class NodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Node
         fields = ['id', 'content', 'title', 'parent', 'children', 'created_at', 'created_by', 'is_deleted']
-        read_only_fields = ['id', 'title', 'created_at', 'created_by']
+        read_only_fields = ['id', 'title', 'created_at', 'created_by', 'is_deleted']
+
     
     def get_title(self, obj):
         """Genera título en el idioma solicitado."""
@@ -220,29 +221,50 @@ class NodeSerializer(serializers.ModelSerializer):
             return fallback_datetime.strftime('%Y-%m-%d %H:%M:%S UTC')
     
     def validate(self, data):
-        """Validaciones de negocio."""
-        content = data.get('content', getattr(self.instance, 'content', None))
-        parent = data.get('parent', getattr(self.instance, 'parent', None))
-
-        queryset = Node.objects.filter(
-            content__iexact=content, 
-            parent=parent, 
-            is_deleted=False
-        )
+        """Validaciones de negocio que manejan PATCH correctamente."""
+        # Obtener instancia actual si existe
+        instance = getattr(self, 'instance', None)
         
-        if self.instance:
-            queryset = queryset.exclude(pk=self.instance.pk)
-
-        if queryset.exists():
-            raise serializers.ValidationError({
-                "content": f"Ya existe un nodo activo con el contenido '{content}' en este nivel."
-            })
-
-        if self.instance and parent and parent.pk == self.instance.pk:
+        # Para PATCH, usar valores actuales si no están en data
+        if self.partial and instance:
+            # Si content no está en data, usar el actual
+            if 'content' not in data:
+                data['content'] = instance.content
+            
+            # Si parent no está en data, usar el actual
+            if 'parent' not in data:
+                data['parent'] = instance.parent
+            
+            # Si is_deleted no está en data, usar el actual
+            if 'is_deleted' not in data:
+                data['is_deleted'] = instance.is_deleted
+        
+        # Ahora data tiene todos los campos necesarios
+        content = data.get('content')
+        parent = data.get('parent')
+        
+        # Validar unicidad solo si content y parent no son None
+        if content is not None and parent is not None:
+            queryset = Node.objects.filter(
+                content__iexact=content, 
+                parent=parent, 
+                is_deleted=False
+            )
+            
+            if instance:
+                queryset = queryset.exclude(pk=instance.pk)
+            
+            if queryset.exists():
+                raise serializers.ValidationError({
+                    "content": f"Ya existe un nodo activo con el contenido '{content}' en este nivel."
+                })
+        
+        # Validar auto-referencia
+        if instance and data.get('parent') and data['parent'].pk == instance.pk:
             raise serializers.ValidationError({
                 "parent": "Un nodo no puede ser su propio padre."
             })
-
+        
         return data
     
     def to_internal_value(self, data):
